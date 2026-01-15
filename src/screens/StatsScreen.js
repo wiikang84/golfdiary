@@ -14,6 +14,7 @@ import {
   loadFieldRounds,
   getMonthlyPractices,
 } from '../utils/storage';
+import ScoreChart from '../components/ScoreChart';
 
 const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -185,6 +186,20 @@ export default function StatsScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* 스코어 추이 그래프 */}
+        <View style={styles.chartWrapper}>
+          <ScoreChart
+            rounds={activeTab === 'all'
+              ? [...screenRounds, ...fieldRounds].sort((a, b) => b.id - a.id)
+              : activeTab === 'screen'
+                ? screenRounds
+                : fieldRounds
+            }
+            title={activeTab === 'all' ? '전체 스코어 추이' :
+                   activeTab === 'screen' ? '스크린 스코어 추이' : '필드 스코어 추이'}
+          />
+        </View>
+
         {/* 월별 캘린더 */}
         <View style={styles.calendarCard}>
           <View style={styles.calendarHeader}>
@@ -354,14 +369,18 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
     marginTop: 20,
+  },
+  chartWrapper: {
+    marginHorizontal: 0,
+    marginBottom: 8,
   },
   // 캘린더 스타일
   calendarCard: {
     backgroundColor: COLORS.cardBg,
     borderRadius: 16,
     padding: 16,
+    marginHorizontal: 16,
     ...SHADOWS.small,
   },
   calendarHeader: {
@@ -444,6 +463,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBg,
     borderRadius: 16,
     marginTop: 16,
+    marginHorizontal: 16,
     overflow: 'hidden',
     ...SHADOWS.small,
   },
@@ -489,6 +509,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBg,
     borderRadius: 16,
     marginTop: 16,
+    marginHorizontal: 16,
     overflow: 'hidden',
     ...SHADOWS.small,
   },
@@ -534,6 +555,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBg,
     borderRadius: 16,
     marginTop: 16,
+    marginHorizontal: 16,
     overflow: 'hidden',
     ...SHADOWS.small,
   },

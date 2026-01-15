@@ -163,6 +163,27 @@ export const getMonthlyPractices = async (year, month) => {
   return monthlyData;
 };
 
+// 사용자 프로필 저장/불러오기
+export const saveUserProfile = async (profile) => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+    return true;
+  } catch (error) {
+    console.error('프로필 저장 실패:', error);
+    return false;
+  }
+};
+
+export const loadUserProfile = async () => {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    return data ? JSON.parse(data) : { nickname: '골퍼' };
+  } catch (error) {
+    console.error('프로필 불러오기 실패:', error);
+    return { nickname: '골퍼' };
+  }
+};
+
 // 이번 주 통계
 export const getWeeklyStats = async () => {
   const practices = await loadPractices();

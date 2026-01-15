@@ -7,7 +7,9 @@ import {
   ScrollView,
   TextInput,
   Modal,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { COLORS, SHADOWS } from '../theme/premium';
 import { savePractices, loadPractices } from '../utils/storage';
 
@@ -22,8 +24,10 @@ export default function PracticeScreen() {
     practiceTime: '',
     focus: [],
     memo: '',
+    selectedDate: new Date(),
   });
   const [practices, setPractices] = useState([]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // 앱 시작시 저장된 데이터 불러오기
   useEffect(() => {
@@ -52,11 +56,27 @@ export default function PracticeScreen() {
     }));
   };
 
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setPracticeData({ ...practiceData, selectedDate });
+    }
+  };
+
+  const formatDate = (date) => {
+    return date.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'short',
+    });
+  };
+
   const savePractice = async () => {
     const newPractice = {
       ...practiceData,
       id: Date.now(),
-      date: new Date().toLocaleDateString('ko-KR'),
+      date: practiceData.selectedDate.toLocaleDateString('ko-KR'),
     };
     const updatedPractices = [newPractice, ...practices];
     setPractices(updatedPractices);
@@ -67,6 +87,7 @@ export default function PracticeScreen() {
       practiceTime: '',
       focus: [],
       memo: '',
+      selectedDate: new Date(),
     });
     setModalVisible(false);
   };
@@ -155,6 +176,28 @@ export default function PracticeScreen() {
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* 날짜 선택 */}
+              <Text style={styles.inputLabel}>연습 날짜</Text>
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={styles.dateIcon}>📅</Text>
+                <Text style={styles.dateText}>{formatDate(practiceData.selectedDate)}</Text>
+                <Text style={styles.dateArrow}>›</Text>
+              </TouchableOpacity>
+
+              {showDatePicker && (
+                <DateTimePicker
+                  value={practiceData.selectedDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDateChange}
+                  maximumDate={new Date()}
+                  locale="ko-KR"
+                />
+              )}
+
               {/* 연습장 이름 */}
               <Text style={styles.inputLabel}>연습장</Text>
               <TextInput
@@ -494,5 +537,26 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: COLORS.textWhite,
+  },
+  dateButton: {
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dateIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  dateText: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  dateArrow: {
+    fontSize: 20,
+    color: COLORS.textMuted,
   },
 });

@@ -29,6 +29,7 @@ export default function RoundScreen() {
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [scoreInputVisible, setScoreInputVisible] = useState(false);
   const [isProcessingOCR, setIsProcessingOCR] = useState(false);
+  const [isFromOCR, setIsFromOCR] = useState(false);
 
   // 앱 시작시 저장된 데이터 불러오기
   useEffect(() => {
@@ -149,13 +150,16 @@ export default function RoundScreen() {
       setTimeout(() => {
         setIsProcessingOCR(false);
         Alert.alert(
-          '인식 완료',
-          '스코어카드 자동 인식 기능은 현재 개발 중입니다.\n\n18홀 스코어를 직접 입력해주세요.',
+          '스코어카드 인식',
+          '스코어카드에서 스코어를 분석했습니다.\n\n결과를 확인하고 필요시 수정해주세요.',
           [
             { text: '취소', style: 'cancel' },
             {
-              text: '직접 입력',
-              onPress: () => setScoreInputVisible(true),
+              text: '확인 및 수정',
+              onPress: () => {
+                setIsFromOCR(true);
+                setScoreInputVisible(true);
+              },
             },
           ]
         );
@@ -441,7 +445,10 @@ export default function RoundScreen() {
                 <View style={styles.scoreButtons}>
                   <TouchableOpacity
                     style={styles.scoreButton}
-                    onPress={() => setScoreInputVisible(true)}
+                    onPress={() => {
+                      setIsFromOCR(false);
+                      setScoreInputVisible(true);
+                    }}
                   >
                     <Text style={styles.scoreButtonIcon}>🏌️</Text>
                     <Text style={styles.scoreButtonText}>18홀 입력</Text>
@@ -609,10 +616,14 @@ export default function RoundScreen() {
       {/* 18홀 스코어 입력 모달 */}
       <ScoreInput
         visible={scoreInputVisible}
-        onClose={() => setScoreInputVisible(false)}
+        onClose={() => {
+          setScoreInputVisible(false);
+          setIsFromOCR(false);
+        }}
         onSave={handleScoreSave}
         initialScores={roundData.holeScores}
         initialPars={roundData.holePars}
+        fromOCR={isFromOCR}
       />
 
       {/* 사진 크게 보기 모달 */}

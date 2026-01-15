@@ -8,67 +8,56 @@ import {
   TextInput,
   Modal,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { COLORS, SHADOWS } from '../theme/premium';
+
+const { width } = Dimensions.get('window');
+const HOLE_WIDTH = (width - 60) / 9; // 9홀씩 표시
 
 // 기본 파 설정 (일반적인 파 72 코스)
 const DEFAULT_PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
 
-export default function ScoreInput({ visible, onClose, onSave, initialScores, initialPars }) {
+export default function ScoreInput({ visible, onClose, onSave, initialScores, initialPars, fromOCR }) {
   const [scores, setScores] = useState(Array(18).fill(''));
   const [pars, setPars] = useState(DEFAULT_PARS);
-  const [activeHole, setActiveHole] = useState(null);
+  const [editingHole, setEditingHole] = useState(null);
 
   useEffect(() => {
-    if (initialScores && initialScores.length === 18) {
-      setScores(initialScores.map(s => s?.toString() || ''));
+    if (visible) {
+      if (initialScores && initialScores.length === 18) {
+        setScores(initialScores.map(s => s?.toString() || ''));
+      } else {
+        setScores(Array(18).fill(''));
+      }
+      if (initialPars && initialPars.length === 18) {
+        setPars(initialPars);
+      } else {
+        setPars(DEFAULT_PARS);
+      }
     }
-    if (initialPars && initialPars.length === 18) {
-      setPars(initialPars);
-    }
-  }, [initialScores, initialPars]);
+  }, [visible, initialScores, initialPars]);
 
   const updateScore = (index, value) => {
     const newScores = [...scores];
-    newScores[index] = value;
+    // 숫자만 허용, 최대 2자리
+    const numValue = value.replace(/[^0-9]/g, '').slice(0, 2);
+    newScores[index] = numValue;
     setScores(newScores);
   };
 
-  const quickScore = (index, delta) => {
-    const par = pars[index];
-    const current = parseInt(scores[index]) || par;
-    const newScore = Math.max(1, current + delta);
-    updateScore(index, newScore.toString());
-  };
-
-  const getScoreColor = (holeIndex) => {
+  const getScoreStyle = (holeIndex) => {
     const score = parseInt(scores[holeIndex]);
     const par = pars[holeIndex];
-    if (isNaN(score)) return COLORS.textMuted;
+    if (isNaN(score) || !score) return {};
 
     const diff = score - par;
-    if (diff <= -2) return '#9C27B0'; // 이글 이하 - 보라
-    if (diff === -1) return COLORS.info; // 버디 - 파랑
-    if (diff === 0) return COLORS.primary; // 파 - 초록
-    if (diff === 1) return COLORS.gold; // 보기 - 노랑
-    if (diff === 2) return '#FF9800'; // 더블보기 - 주황
-    return COLORS.error; // 트리플 이상 - 빨강
-  };
-
-  const getScoreName = (holeIndex) => {
-    const score = parseInt(scores[holeIndex]);
-    const par = pars[holeIndex];
-    if (isNaN(score)) return '';
-
-    const diff = score - par;
-    if (diff <= -3) return 'Albatross';
-    if (diff === -2) return 'Eagle';
-    if (diff === -1) return 'Birdie';
-    if (diff === 0) return 'Par';
-    if (diff === 1) return 'Bogey';
-    if (diff === 2) return 'Double';
-    if (diff === 3) return 'Triple';
-    return `+${diff}`;
+    if (diff <= -2) return { backgroundColor: COLORS.scoreEagle, color: '#fff' }; // 이글
+    if (diff === -1) return { backgroundColor: COLORS.scoreBirdie, color: '#fff' }; // 버디
+    if (diff === 0) return { backgroundColor: COLORS.scorePar, color: '#fff' }; // 파
+    if (diff === 1) return { backgroundColor: COLORS.scoreBogey, color: '#fff' }; // 보기
+    if (diff === 2) return { backgroundColor: COLORS.scoreDouble, color: '#fff' }; // 더블
+    return { backgroundColor: COLORS.scoreTriple, color: '#fff' }; // 트리플+
   };
 
   // 전반/후반/총 스코어 계산
@@ -77,17 +66,17 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
     const back9 = scores.slice(9, 18).reduce((sum, s) => sum + (parseInt(s) || 0), 0);
     const frontPar = pars.slice(0, 9).reduce((sum, p) => sum + p, 0);
     const backPar = pars.slice(9, 18).reduce((sum, p) => sum + p, 0);
-    const totalPar = frontPar + backPar;
     const total = front9 + back9;
-    const filledHoles = scores.filter(s => s !== '' && !isNaN(parseInt(s))).length;
+    const totalPar = frontPar + backPar;
+    const filledCount = scores.filter(s => s && !isNaN(parseInt(s))).length;
 
-    return { front9, back9, frontPar, backPar, total, totalPar, filledHoles };
+    return { front9, back9, frontPar, backPar, total, totalPar, filledCount };
   };
 
   const totals = calculateTotals();
 
   const handleSave = () => {
-    if (totals.filledHoles === 0) {
+    if (totals.filledCount === 0) {
       Alert.alert('알림', '최소 1홀 이상 스코어를 입력해주세요.');
       return;
     }
@@ -101,6 +90,16 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
     onClose();
   };
 
+  const fillWithPar = () => {
+    Alert.alert('파로 채우기', '모든 홀을 파로 채울까요?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '확인',
+        onPress: () => setScores(pars.map(p => p.toString())),
+      },
+    ]);
+  };
+
   const resetScores = () => {
     Alert.alert('초기화', '모든 스코어를 초기화할까요?', [
       { text: '취소', style: 'cancel' },
@@ -108,64 +107,69 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
     ]);
   };
 
-  const renderHoleInput = (holeIndex) => {
-    const holeNum = holeIndex + 1;
-    const par = pars[holeIndex];
-    const score = scores[holeIndex];
-    const scoreColor = getScoreColor(holeIndex);
-    const scoreName = getScoreName(holeIndex);
+  // 스코어 테이블 행 렌더링
+  const renderScoreRow = (startHole, label) => {
+    const holes = Array.from({ length: 9 }, (_, i) => startHole + i);
+    const rowScores = holes.map(h => parseInt(scores[h]) || 0);
+    const rowTotal = rowScores.reduce((a, b) => a + b, 0);
+    const rowPar = holes.map(h => pars[h]).reduce((a, b) => a + b, 0);
 
     return (
-      <TouchableOpacity
-        key={holeIndex}
-        style={[
-          styles.holeCard,
-          activeHole === holeIndex && styles.holeCardActive,
-        ]}
-        onPress={() => setActiveHole(activeHole === holeIndex ? null : holeIndex)}
-      >
-        <View style={styles.holeHeader}>
-          <Text style={styles.holeNumber}>{holeNum}H</Text>
-          <Text style={styles.holePar}>PAR {par}</Text>
+      <View style={styles.scoreTable}>
+        {/* 헤더: 홀 번호 */}
+        <View style={styles.tableRow}>
+          <View style={[styles.tableCell, styles.labelCell]}>
+            <Text style={styles.labelText}>{label}</Text>
+          </View>
+          {holes.map(h => (
+            <View key={h} style={styles.tableCell}>
+              <Text style={styles.holeNumber}>{h + 1}</Text>
+            </View>
+          ))}
+          <View style={[styles.tableCell, styles.totalCell]}>
+            <Text style={styles.totalLabel}>합계</Text>
+          </View>
         </View>
 
-        {activeHole === holeIndex ? (
-          <View style={styles.scoreInputContainer}>
-            <TouchableOpacity
-              style={styles.scoreBtn}
-              onPress={() => quickScore(holeIndex, -1)}
-            >
-              <Text style={styles.scoreBtnText}>-</Text>
-            </TouchableOpacity>
-            <TextInput
-              style={styles.scoreInput}
-              value={score}
-              onChangeText={(text) => updateScore(holeIndex, text.replace(/[^0-9]/g, ''))}
-              keyboardType="numeric"
-              maxLength={2}
-              placeholder={par.toString()}
-              placeholderTextColor={COLORS.textMuted}
-            />
-            <TouchableOpacity
-              style={styles.scoreBtn}
-              onPress={() => quickScore(holeIndex, 1)}
-            >
-              <Text style={styles.scoreBtnText}>+</Text>
-            </TouchableOpacity>
+        {/* 파 */}
+        <View style={styles.tableRow}>
+          <View style={[styles.tableCell, styles.labelCell]}>
+            <Text style={styles.parLabel}>PAR</Text>
           </View>
-        ) : (
-          <View style={styles.scoreDisplay}>
-            <Text style={[styles.scoreValue, { color: scoreColor }]}>
-              {score || '-'}
-            </Text>
-            {scoreName && (
-              <Text style={[styles.scoreName, { color: scoreColor }]}>
-                {scoreName}
-              </Text>
-            )}
+          {holes.map(h => (
+            <View key={h} style={styles.tableCell}>
+              <Text style={styles.parValue}>{pars[h]}</Text>
+            </View>
+          ))}
+          <View style={[styles.tableCell, styles.totalCell]}>
+            <Text style={styles.parTotal}>{rowPar}</Text>
           </View>
-        )}
-      </TouchableOpacity>
+        </View>
+
+        {/* 스코어 입력 */}
+        <View style={styles.tableRow}>
+          <View style={[styles.tableCell, styles.labelCell]}>
+            <Text style={styles.scoreLabel}>타수</Text>
+          </View>
+          {holes.map(h => {
+            const scoreStyle = getScoreStyle(h);
+            return (
+              <TouchableOpacity
+                key={h}
+                style={[styles.tableCell, styles.scoreCell, scoreStyle]}
+                onPress={() => setEditingHole(h)}
+              >
+                <Text style={[styles.scoreValue, scoreStyle.color && { color: scoreStyle.color }]}>
+                  {scores[h] || '-'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+          <View style={[styles.tableCell, styles.totalCell, styles.scoreTotalCell]}>
+            <Text style={styles.scoreTotal}>{rowTotal || '-'}</Text>
+          </View>
+        </View>
+      </View>
     );
   };
 
@@ -178,101 +182,188 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
+          {/* 헤더 */}
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>18홀 스코어</Text>
+            <Text style={styles.modalTitle}>18홀 스코어 입력</Text>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
               <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
           </View>
 
+          {/* OCR 안내 메시지 */}
+          {fromOCR && (
+            <View style={styles.ocrNotice}>
+              <Text style={styles.ocrNoticeText}>
+                스코어카드 인식 결과입니다. 틀린 부분을 터치해서 수정하세요.
+              </Text>
+            </View>
+          )}
+
           {/* 총 스코어 요약 */}
           <View style={styles.summaryBar}>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>전반</Text>
-              <Text style={styles.summaryValue}>
-                {totals.front9 > 0 ? totals.front9 : '-'}
-                <Text style={styles.summaryPar}> / {totals.frontPar}</Text>
-              </Text>
+              <Text style={styles.summaryLabel}>전반(OUT)</Text>
+              <Text style={styles.summaryValue}>{totals.front9 || '-'}</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>후반</Text>
-              <Text style={styles.summaryValue}>
-                {totals.back9 > 0 ? totals.back9 : '-'}
-                <Text style={styles.summaryPar}> / {totals.backPar}</Text>
-              </Text>
+              <Text style={styles.summaryLabel}>후반(IN)</Text>
+              <Text style={styles.summaryValue}>{totals.back9 || '-'}</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={[styles.summaryItem, styles.summaryTotal]}>
-              <Text style={styles.summaryLabel}>총</Text>
-              <Text style={styles.summaryTotalValue}>
-                {totals.total > 0 ? totals.total : '-'}
-              </Text>
+              <Text style={styles.summaryLabel}>총 스코어</Text>
+              <Text style={styles.summaryTotalValue}>{totals.total || '-'}</Text>
               {totals.total > 0 && (
                 <Text style={[
                   styles.summaryDiff,
                   { color: totals.total - totals.totalPar <= 0 ? COLORS.info : COLORS.error }
                 ]}>
-                  {totals.total - totals.totalPar > 0 ? '+' : ''}
-                  {totals.total - totals.totalPar}
+                  ({totals.total - totals.totalPar > 0 ? '+' : ''}{totals.total - totals.totalPar})
                 </Text>
               )}
             </View>
           </View>
 
-          <ScrollView style={styles.holesContainer} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {/* 전반 9홀 */}
             <Text style={styles.sectionTitle}>전반 (OUT)</Text>
-            <View style={styles.holesGrid}>
-              {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(renderHoleInput)}
-            </View>
+            {renderScoreRow(0, 'HOLE')}
 
             {/* 후반 9홀 */}
             <Text style={styles.sectionTitle}>후반 (IN)</Text>
-            <View style={styles.holesGrid}>
-              {[9, 10, 11, 12, 13, 14, 15, 16, 17].map(renderHoleInput)}
-            </View>
+            {renderScoreRow(9, 'HOLE')}
 
             {/* 범례 */}
             <View style={styles.legend}>
-              <Text style={styles.legendTitle}>스코어 범례</Text>
-              <View style={styles.legendItems}>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: '#9C27B0' }]} />
-                  <Text style={styles.legendText}>이글</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: COLORS.info }]} />
-                  <Text style={styles.legendText}>버디</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: COLORS.primary }]} />
-                  <Text style={styles.legendText}>파</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: COLORS.gold }]} />
-                  <Text style={styles.legendText}>보기</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: COLORS.error }]} />
-                  <Text style={styles.legendText}>더블+</Text>
-                </View>
+              <View style={[styles.legendItem, { backgroundColor: COLORS.scoreEagle }]}>
+                <Text style={styles.legendText}>이글</Text>
               </View>
+              <View style={[styles.legendItem, { backgroundColor: COLORS.scoreBirdie }]}>
+                <Text style={styles.legendText}>버디</Text>
+              </View>
+              <View style={[styles.legendItem, { backgroundColor: COLORS.scorePar }]}>
+                <Text style={styles.legendText}>파</Text>
+              </View>
+              <View style={[styles.legendItem, { backgroundColor: COLORS.scoreBogey }]}>
+                <Text style={styles.legendText}>보기</Text>
+              </View>
+              <View style={[styles.legendItem, { backgroundColor: COLORS.scoreTriple }]}>
+                <Text style={styles.legendText}>더블+</Text>
+              </View>
+            </View>
+
+            {/* 빠른 채우기 버튼 */}
+            <View style={styles.quickActions}>
+              <TouchableOpacity style={styles.quickButton} onPress={fillWithPar}>
+                <Text style={styles.quickButtonText}>전체 파로 채우기</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.quickButton, styles.resetButton]} onPress={resetScores}>
+                <Text style={styles.quickButtonText}>초기화</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.bottomSpace} />
           </ScrollView>
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.resetButton} onPress={resetScores}>
-              <Text style={styles.resetButtonText}>초기화</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>저장하기</Text>
-            </TouchableOpacity>
-          </View>
+          {/* 저장 버튼 */}
+          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+            <Text style={styles.saveButtonText}>저장하기</Text>
+          </TouchableOpacity>
         </View>
       </View>
+
+      {/* 개별 홀 스코어 입력 모달 */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={editingHole !== null}
+        onRequestClose={() => setEditingHole(null)}
+      >
+        <TouchableOpacity
+          style={styles.editOverlay}
+          activeOpacity={1}
+          onPress={() => setEditingHole(null)}
+        >
+          <View style={styles.editBox}>
+            <Text style={styles.editTitle}>{editingHole !== null ? `${editingHole + 1}번홀` : ''}</Text>
+            <Text style={styles.editPar}>PAR {editingHole !== null ? pars[editingHole] : ''}</Text>
+
+            <View style={styles.editInputRow}>
+              <TouchableOpacity
+                style={styles.editBtn}
+                onPress={() => {
+                  if (editingHole !== null) {
+                    const current = parseInt(scores[editingHole]) || pars[editingHole];
+                    updateScore(editingHole, Math.max(1, current - 1).toString());
+                  }
+                }}
+              >
+                <Text style={styles.editBtnText}>-</Text>
+              </TouchableOpacity>
+
+              <TextInput
+                style={styles.editInput}
+                value={editingHole !== null ? scores[editingHole] : ''}
+                onChangeText={(text) => editingHole !== null && updateScore(editingHole, text)}
+                keyboardType="numeric"
+                maxLength={2}
+                placeholder={editingHole !== null ? pars[editingHole].toString() : ''}
+                placeholderTextColor={COLORS.textMuted}
+                autoFocus
+              />
+
+              <TouchableOpacity
+                style={styles.editBtn}
+                onPress={() => {
+                  if (editingHole !== null) {
+                    const current = parseInt(scores[editingHole]) || pars[editingHole];
+                    updateScore(editingHole, (current + 1).toString());
+                  }
+                }}
+              >
+                <Text style={styles.editBtnText}>+</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 빠른 선택 버튼 */}
+            <View style={styles.quickScoreRow}>
+              {editingHole !== null && [
+                pars[editingHole] - 2,
+                pars[editingHole] - 1,
+                pars[editingHole],
+                pars[editingHole] + 1,
+                pars[editingHole] + 2,
+                pars[editingHole] + 3,
+              ].filter(v => v > 0).map(val => (
+                <TouchableOpacity
+                  key={val}
+                  style={[
+                    styles.quickScoreBtn,
+                    parseInt(scores[editingHole]) === val && styles.quickScoreBtnActive
+                  ]}
+                  onPress={() => {
+                    updateScore(editingHole, val.toString());
+                    setTimeout(() => setEditingHole(null), 150);
+                  }}
+                >
+                  <Text style={[
+                    styles.quickScoreText,
+                    parseInt(scores[editingHole]) === val && styles.quickScoreTextActive
+                  ]}>{val}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={styles.editDone}
+              onPress={() => setEditingHole(null)}
+            >
+              <Text style={styles.editDoneText}>확인</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </Modal>
   );
 }
@@ -315,22 +406,33 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.textWhite,
   },
+  ocrNotice: {
+    backgroundColor: COLORS.info + '20',
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 10,
+  },
+  ocrNoticeText: {
+    fontSize: 14,
+    color: COLORS.info,
+    textAlign: 'center',
+  },
   summaryBar: {
     flexDirection: 'row',
     backgroundColor: COLORS.backgroundGray,
     padding: 16,
-    alignItems: 'center',
+    marginTop: 8,
   },
   summaryItem: {
     flex: 1,
     alignItems: 'center',
   },
   summaryTotal: {
-    flex: 1.2,
+    flex: 1.3,
   },
   summaryDivider: {
     width: 1,
-    height: 40,
     backgroundColor: COLORS.divider,
   },
   summaryLabel: {
@@ -338,15 +440,10 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   summaryValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: COLORS.textPrimary,
     marginTop: 4,
-  },
-  summaryPar: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: COLORS.textSecondary,
   },
   summaryTotalValue: {
     fontSize: 28,
@@ -357,152 +454,235 @@ const styles = StyleSheet.create({
   summaryDiff: {
     fontSize: 14,
     fontWeight: '600',
-    marginTop: 2,
   },
-  holesContainer: {
+  scrollContent: {
     flex: 1,
-    padding: 16,
+    paddingHorizontal: 12,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: COLORS.textPrimary,
-    marginBottom: 12,
-    marginTop: 8,
-  },
-  holesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  holeCard: {
-    width: '31%',
-    backgroundColor: COLORS.backgroundGray,
-    borderRadius: 12,
-    padding: 10,
-    alignItems: 'center',
-  },
-  holeCardActive: {
-    backgroundColor: COLORS.primary + '20',
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-  },
-  holeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
+    marginTop: 16,
     marginBottom: 8,
+    marginLeft: 4,
   },
-  holeNumber: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
+  scoreTable: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.divider,
   },
-  holePar: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
+  tableRow: {
+    flexDirection: 'row',
   },
-  scoreDisplay: {
+  tableCell: {
+    flex: 1,
+    paddingVertical: 10,
     alignItems: 'center',
-    minHeight: 50,
     justifyContent: 'center',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: COLORS.divider,
   },
-  scoreValue: {
-    fontSize: 28,
-    fontWeight: '700',
+  labelCell: {
+    flex: 0.9,
+    backgroundColor: COLORS.backgroundGray,
   },
-  scoreName: {
+  totalCell: {
+    flex: 1.1,
+    backgroundColor: COLORS.backgroundGray,
+  },
+  scoreTotalCell: {
+    backgroundColor: COLORS.primary + '20',
+  },
+  labelText: {
     fontSize: 10,
     fontWeight: '600',
-    marginTop: 2,
+    color: COLORS.textSecondary,
   },
-  scoreInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  scoreBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scoreBtnText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textWhite,
-  },
-  scoreInput: {
-    width: 40,
-    height: 40,
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 8,
-    textAlign: 'center',
-    fontSize: 20,
+  holeNumber: {
+    fontSize: 12,
     fontWeight: '700',
     color: COLORS.textPrimary,
+  },
+  parLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  parValue: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  parTotal: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  scoreLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  scoreCell: {
+    backgroundColor: COLORS.cardBg,
+  },
+  scoreValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  scoreTotal: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  totalLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
   },
   legend: {
-    marginTop: 20,
-    padding: 16,
-    backgroundColor: COLORS.backgroundGray,
-    borderRadius: 12,
-  },
-  legendTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: 10,
-  },
-  legendItems: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
   },
   legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  legendDot: {
-    width: 12,
-    height: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 6,
   },
   legendText: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  quickActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+    paddingHorizontal: 4,
+  },
+  quickButton: {
+    flex: 1,
+    backgroundColor: COLORS.backgroundGray,
+    padding: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  resetButton: {
+    backgroundColor: COLORS.error + '20',
+  },
+  quickButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
     color: COLORS.textSecondary,
   },
   bottomSpace: {
     height: 20,
   },
-  buttonRow: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 12,
-  },
-  resetButton: {
-    flex: 1,
-    backgroundColor: COLORS.backgroundGray,
-    borderRadius: 14,
-    padding: 16,
-    alignItems: 'center',
-  },
-  resetButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
   saveButton: {
-    flex: 2,
     backgroundColor: COLORS.primary,
+    margin: 16,
+    padding: 18,
     borderRadius: 14,
-    padding: 16,
     alignItems: 'center',
   },
   saveButtonText: {
     fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.textWhite,
+  },
+  // 개별 홀 편집 모달
+  editOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editBox: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 20,
+    padding: 24,
+    width: '80%',
+    alignItems: 'center',
+  },
+  editTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  editPar: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  editInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    gap: 12,
+  },
+  editBtn: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editBtnText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: COLORS.textWhite,
+  },
+  editInput: {
+    width: 80,
+    height: 60,
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    fontSize: 32,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: COLORS.textPrimary,
+  },
+  quickScoreRow: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 8,
+  },
+  quickScoreBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.backgroundGray,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickScoreBtnActive: {
+    backgroundColor: COLORS.primary,
+  },
+  quickScoreText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  quickScoreTextActive: {
+    color: COLORS.textWhite,
+  },
+  editDone: {
+    marginTop: 20,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 40,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  editDoneText: {
+    fontSize: 16,
     fontWeight: '700',
     color: COLORS.textWhite,
   },

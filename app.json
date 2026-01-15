@@ -2,7 +2,7 @@
   "expo": {
     "name": "Golf Diary",
     "slug": "golf-diary",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -23,7 +23,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.bitnappa.golfdiary",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -42,7 +42,8 @@
           "photosPermission": "라운드 사진을 저장하려면 사진 접근 권한이 필요합니다.",
           "cameraPermission": "라운드 사진을 촬영하려면 카메라 권한이 필요합니다."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "owner": "wiikang",
     "extra": {

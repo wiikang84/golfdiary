@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,49 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { COLORS, SHADOWS } from '../theme/premium';
+import { loadUserProfile, saveUserProfile, calculateLevel, getLevelTitle } from '../utils/storage';
 
 export default function SettingsScreen() {
+  const [nickname, setNickname] = useState('골퍼');
+  const [levelInfo, setLevelInfo] = useState(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [tempNickname, setTempNickname] = useState('');
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    const profile = await loadUserProfile();
+    const level = await calculateLevel();
+    setNickname(profile.nickname || '골퍼');
+    setLevelInfo(level);
+  };
+
+  const handleEditProfile = () => {
+    setTempNickname(nickname);
+    setEditModalVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (tempNickname.trim().length === 0) {
+      Alert.alert('알림', '닉네임을 입력해주세요.');
+      return;
+    }
+    if (tempNickname.trim().length > 10) {
+      Alert.alert('알림', '닉네임은 10자 이내로 입력해주세요.');
+      return;
+    }
+    await saveUserProfile({ nickname: tempNickname.trim() });
+    setNickname(tempNickname.trim());
+    setEditModalVisible(false);
+    Alert.alert('저장 완료', '닉네임이 변경되었습니다.');
+  };
+
   const handleComingSoon = () => {
     Alert.alert('준비 중', '곧 추가될 기능입니다!');
   };
@@ -29,10 +68,12 @@ export default function SettingsScreen() {
             <Text style={styles.avatarText}>🏌️</Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>골퍼</Text>
-            <Text style={styles.profileLevel}>LV. 1 초보 골퍼</Text>
+            <Text style={styles.profileName}>{nickname}</Text>
+            <Text style={styles.profileLevel}>
+              LV. {levelInfo?.level || 1} {getLevelTitle(levelInfo?.level || 1)}
+            </Text>
           </View>
-          <TouchableOpacity style={styles.editButton} onPress={handleComingSoon}>
+          <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
             <Text style={styles.editButtonText}>수정</Text>
           </TouchableOpacity>
         </View>
@@ -122,6 +163,43 @@ export default function SettingsScreen() {
 
         <View style={styles.bottomSpace} />
       </ScrollView>
+
+      {/* 닉네임 수정 모달 */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={editModalVisible}
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>닉네임 변경</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="닉네임 입력 (최대 10자)"
+              placeholderTextColor={COLORS.textMuted}
+              value={tempNickname}
+              onChangeText={setTempNickname}
+              maxLength={10}
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setEditModalVisible(false)}
+              >
+                <Text style={styles.modalButtonTextCancel}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSave]}
+                onPress={handleSaveProfile}
+              >
+                <Text style={styles.modalButtonTextSave}>저장</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -309,5 +387,58 @@ const styles = StyleSheet.create({
   },
   bottomSpace: {
     height: 40,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalInput: {
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: COLORS.backgroundGray,
+  },
+  modalButtonSave: {
+    backgroundColor: COLORS.primary,
+  },
+  modalButtonTextCancel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  modalButtonTextSave: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textWhite,
   },
 });
