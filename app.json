@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Golf Diary",
+    "slug": "golf-diary",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1B5E20"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bitnappa.golfdiary"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1B5E20"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.bitnappa.golfdiary",
+      "versionCode": 1,
+      "permissions": []
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font"
+    ],
+    "owner": "wiikang",
+    "extra": {
+      "eas": {
+        "projectId": "5372e81e-2f05-4254-a179-30e0fed66e6a"
+      }
+    }
+  }
+}
