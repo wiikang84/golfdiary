@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- 골드 그라데이션 -->
+    <linearGradient id="gold2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F4E4BA"/>
+      <stop offset="30%" style="stop-color:#C9A227"/>
+      <stop offset="70%" style="stop-color:#AA8C2C"/>
+      <stop offset="100%" style="stop-color:#8B7355"/>
+    </linearGradient>
+
+    <!-- 네이비 그라데이션 -->
+    <linearGradient id="navy" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1A237E"/>
+      <stop offset="100%" style="stop-color:#0D1642"/>
+    </linearGradient>
+
+    <!-- 빛 효과 -->
+    <radialGradient id="shine" cx="30%" cy="30%" r="70%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.15"/>
+      <stop offset="100%" style="stop-color:#FFFFFF;stop-opacity:0"/>
+    </radialGradient>
+
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 배경 -->
+  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#navy)"/>
+
+  <!-- 빛 효과 오버레이 -->
+  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#shine)"/>
+
+  <!-- 골드 원형 프레임 -->
+  <circle cx="256" cy="240" r="140" fill="none" stroke="url(#gold2)" stroke-width="6" filter="url(#glow)"/>
+  <circle cx="256" cy="240" r="125" fill="none" stroke="url(#gold2)" stroke-width="2" opacity="0.5"/>
+
+  <!-- 골프 클럽 (크로스) -->
+  <g filter="url(#glow)">
+    <!-- 왼쪽 클럽 -->
+    <path d="M180 320 L210 160 L220 160 L195 320 Z" fill="url(#gold2)"/>
+    <ellipse cx="215" cy="155" rx="20" ry="12" fill="url(#gold2)"/>
+
+    <!-- 오른쪽 클럽 -->
+    <path d="M332 320 L302 160 L292 160 L317 320 Z" fill="url(#gold2)"/>
+    <ellipse cx="297" cy="155" rx="20" ry="12" fill="url(#gold2)"/>
+  </g>
+
+  <!-- 중앙 골프공 -->
+  <circle cx="256" cy="260" r="50" fill="#FAFAFA"/>
+  <g fill="#E0E0E0" opacity="0.6">
+    <circle cx="240" cy="245" r="5"/>
+    <circle cx="256" cy="240" r="5"/>
+    <circle cx="272" cy="245" r="5"/>
+    <circle cx="235" cy="260" r="5"/>
+    <circle cx="250" cy="258" r="5"/>
+    <circle cx="265" cy="256" r="5"/>
+    <circle cx="278" cy="260" r="5"/>
+    <circle cx="245" cy="275" r="5"/>
+    <circle cx="260" cy="273" r="5"/>
+    <circle cx="275" cy="275" r="5"/>
+  </g>
+
+  <!-- 하단 텍스트 -->
+  <text x="256" y="420" font-family="Georgia, serif" font-size="48" font-weight="bold" fill="url(#gold2)" text-anchor="middle" letter-spacing="8" filter="url(#glow)">GOLF</text>
+  <text x="256" y="465" font-family="Georgia, serif" font-size="32" fill="url(#gold2)" text-anchor="middle" letter-spacing="12" opacity="0.8">DIARY</text>
+</svg>

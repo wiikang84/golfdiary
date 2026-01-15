@@ -30,6 +30,8 @@ export default function RoundScreen() {
   const [scoreInputVisible, setScoreInputVisible] = useState(false);
   const [isProcessingOCR, setIsProcessingOCR] = useState(false);
   const [isFromOCR, setIsFromOCR] = useState(false);
+  const [editingRound, setEditingRound] = useState(null); // 수정 중인 라운드
+  const [isEditMode, setIsEditMode] = useState(false); // 수정 모드 여부
 
   // 앱 시작시 저장된 데이터 불러오기
   useEffect(() => {
@@ -103,8 +105,45 @@ export default function RoundScreen() {
     }
   };
 
-  // 스코어카드 촬영 (OCR용)
-  const captureScorecard = async () => {
+  // 스코어카드 사진 선택 (카메라/갤러리 선택)
+  const captureScorecard = () => {
+    Alert.alert(
+      '스코어카드 불러오기',
+      '스코어카드 사진을 어떻게 가져올까요?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '갤러리에서 선택',
+          onPress: pickScorecardFromGallery,
+        },
+        {
+          text: '카메라로 촬영',
+          onPress: takeScorecardPhoto,
+        },
+      ]
+    );
+  };
+
+  // 갤러리에서 스코어카드 선택
+  const pickScorecardFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('권한 필요', '사진을 선택하려면 갤러리 접근 권한이 필요합니다.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.9,
+    });
+
+    if (!result.canceled && result.assets) {
+      handleScorecardSelected(result.assets[0].uri);
+    }
+  };
+
+  // 카메라로 스코어카드 촬영
+  const takeScorecardPhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('권한 필요', '사진을 촬영하려면 카메라 접근 권한이 필요합니다.');
@@ -117,25 +156,29 @@ export default function RoundScreen() {
     });
 
     if (!result.canceled && result.assets) {
-      const photoUri = result.assets[0].uri;
-      setRoundData(prev => ({
-        ...prev,
-        photos: [...prev.photos, photoUri].slice(0, 5),
-      }));
-
-      // OCR 처리 시도
-      Alert.alert(
-        '스코어카드 인식',
-        '스코어카드에서 점수를 자동으로 인식하시겠습니까?\n\n※ 인식 정확도는 스코어카드 상태에 따라 다를 수 있습니다.',
-        [
-          { text: '취소', style: 'cancel' },
-          {
-            text: '인식하기',
-            onPress: () => processScorecard(photoUri),
-          },
-        ]
-      );
+      handleScorecardSelected(result.assets[0].uri);
     }
+  };
+
+  // 스코어카드 선택 후 처리
+  const handleScorecardSelected = (photoUri) => {
+    setRoundData(prev => ({
+      ...prev,
+      photos: [...prev.photos, photoUri].slice(0, 5),
+    }));
+
+    // OCR 처리 시도
+    Alert.alert(
+      '스코어카드 인식',
+      '스코어카드에서 점수를 자동으로 인식하시겠습니까?\n\n※ 인식 정확도는 스코어카드 상태에 따라 다를 수 있습니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '인식하기',
+          onPress: () => processScorecard(photoUri),
+        },
+      ]
+    );
   };
 
   // 스코어카드 OCR 처리 (로컬)
@@ -194,24 +237,31 @@ export default function RoundScreen() {
     }));
   };
 
-  const saveRound = async () => {
-    const newRound = {
-      ...roundData,
-      id: Date.now(),
-      date: new Date().toLocaleDateString('ko-KR'),
-      type: activeTab,
-    };
+  // 라운드 수정 모드로 열기
+  const openEditMode = (round) => {
+    setEditingRound(round);
+    setIsEditMode(true);
+    setRoundData({
+      courseName: round.courseName || '',
+      score: round.score || '',
+      venue: round.venue || '',
+      difficulty: round.difficulty || '',
+      mulligan: round.mulligan || '',
+      weather: round.weather || '',
+      companions: round.companions || '',
+      cost: round.cost || '',
+      memo: round.memo || '',
+      photos: round.photos || [],
+      holeScores: round.holeScores || null,
+      holePars: round.holePars || null,
+    });
+    setModalVisible(true);
+  };
 
-    if (activeTab === 'screen') {
-      const updatedRounds = [newRound, ...screenRounds];
-      setScreenRounds(updatedRounds);
-      await saveScreenRounds(updatedRounds);
-    } else {
-      const updatedRounds = [newRound, ...fieldRounds];
-      setFieldRounds(updatedRounds);
-      await saveFieldRounds(updatedRounds);
-    }
-
+  // 새 라운드 모드로 열기
+  const openNewMode = () => {
+    setEditingRound(null);
+    setIsEditMode(false);
     setRoundData({
       courseName: '',
       score: '',
@@ -226,7 +276,101 @@ export default function RoundScreen() {
       holeScores: null,
       holePars: null,
     });
+    setModalVisible(true);
+  };
+
+  // 모달 닫기
+  const closeModal = () => {
     setModalVisible(false);
+    setIsEditMode(false);
+    setEditingRound(null);
+    setRoundData({
+      courseName: '',
+      score: '',
+      venue: '',
+      difficulty: '',
+      mulligan: '',
+      weather: '',
+      companions: '',
+      cost: '',
+      memo: '',
+      photos: [],
+      holeScores: null,
+      holePars: null,
+    });
+  };
+
+  const saveRound = async () => {
+    if (isEditMode && editingRound) {
+      // 수정 모드: 기존 라운드 업데이트
+      const updatedRound = {
+        ...editingRound,
+        ...roundData,
+      };
+
+      if (editingRound.type === 'screen') {
+        const updatedRounds = screenRounds.map(r =>
+          r.id === editingRound.id ? updatedRound : r
+        );
+        setScreenRounds(updatedRounds);
+        await saveScreenRounds(updatedRounds);
+      } else {
+        const updatedRounds = fieldRounds.map(r =>
+          r.id === editingRound.id ? updatedRound : r
+        );
+        setFieldRounds(updatedRounds);
+        await saveFieldRounds(updatedRounds);
+      }
+    } else {
+      // 새 라운드 저장
+      const newRound = {
+        ...roundData,
+        id: Date.now(),
+        date: new Date().toLocaleDateString('ko-KR'),
+        type: activeTab,
+      };
+
+      if (activeTab === 'screen') {
+        const updatedRounds = [newRound, ...screenRounds];
+        setScreenRounds(updatedRounds);
+        await saveScreenRounds(updatedRounds);
+      } else {
+        const updatedRounds = [newRound, ...fieldRounds];
+        setFieldRounds(updatedRounds);
+        await saveFieldRounds(updatedRounds);
+      }
+    }
+
+    closeModal();
+  };
+
+  // 라운드 삭제
+  const deleteRound = () => {
+    if (!editingRound) return;
+
+    Alert.alert(
+      '기록 삭제',
+      '이 라운드 기록을 삭제하시겠습니까?\n삭제된 기록은 복구할 수 없습니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            if (editingRound.type === 'screen') {
+              const updatedRounds = screenRounds.filter(r => r.id !== editingRound.id);
+              setScreenRounds(updatedRounds);
+              await saveScreenRounds(updatedRounds);
+            } else {
+              const updatedRounds = fieldRounds.filter(r => r.id !== editingRound.id);
+              setFieldRounds(updatedRounds);
+              await saveFieldRounds(updatedRounds);
+            }
+            closeModal();
+          },
+        },
+      ]
+    );
   };
 
   const rounds = activeTab === 'screen' ? screenRounds : fieldRounds;
@@ -288,7 +432,7 @@ export default function RoundScreen() {
       {/* 기록 추가 버튼 */}
       <TouchableOpacity
         style={[styles.addButton, activeTab === 'field' && styles.addButtonField]}
-        onPress={() => setModalVisible(true)}
+        onPress={openNewMode}
       >
         <Text style={styles.addButtonIcon}>+</Text>
         <Text style={styles.addButtonText}>
@@ -310,7 +454,12 @@ export default function RoundScreen() {
           </View>
         ) : (
           rounds.map(round => (
-            <View key={round.id} style={styles.roundCard}>
+            <TouchableOpacity
+              key={round.id}
+              style={styles.roundCard}
+              onPress={() => openEditMode(round)}
+              activeOpacity={0.7}
+            >
               <View style={[
                 styles.cardHeader,
                 activeTab === 'field' && styles.cardHeaderField
@@ -392,7 +541,7 @@ export default function RoundScreen() {
                   </View>
                 )}
               </View>
-            </View>
+            </TouchableOpacity>
           ))
         )}
         <View style={styles.bottomSpace} />
@@ -411,15 +560,32 @@ export default function RoundScreen() {
               styles.modalHeader,
               activeTab === 'field' && styles.modalHeaderField
             ]}>
-              <Text style={styles.modalTitle}>
-                {activeTab === 'screen' ? '스크린 라운드' : '필드 라운드'}
-              </Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
+              <View style={styles.modalHeaderLeft}>
+                <Text style={styles.modalTitle}>
+                  {isEditMode ? '기록 수정' : (activeTab === 'screen' ? '스크린 라운드' : '필드 라운드')}
+                </Text>
+                {isEditMode && (
+                  <Text style={styles.modalSubtitle}>
+                    {editingRound?.date} · {editingRound?.courseName || '코스'}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.modalHeaderRight}>
+                {isEditMode && (
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={deleteRound}
+                  >
+                    <Text style={styles.deleteButtonText}>삭제</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={closeModal}
+                >
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
@@ -607,7 +773,7 @@ export default function RoundScreen() {
               style={[styles.saveButton, activeTab === 'field' && styles.saveButtonField]}
               onPress={saveRound}
             >
-              <Text style={styles.saveButtonText}>저장하기</Text>
+              <Text style={styles.saveButtonText}>{isEditMode ? '수정하기' : '저장하기'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -913,6 +1079,30 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: COLORS.textWhite,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+  },
+  modalHeaderLeft: {
+    flex: 1,
+  },
+  modalHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  deleteButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  deleteButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF6B6B',
   },
   closeButton: {
     width: 36,
