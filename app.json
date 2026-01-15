@@ -23,14 +23,26 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.bitnappa.golfdiary",
-      "versionCode": 1,
-      "permissions": []
+      "versionCode": 2,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "라운드 사진을 저장하려면 사진 접근 권한이 필요합니다.",
+          "cameraPermission": "라운드 사진을 촬영하려면 카메라 권한이 필요합니다."
+        }
+      ]
     ],
     "owner": "wiikang",
     "extra": {

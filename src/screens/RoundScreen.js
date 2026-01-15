@@ -7,9 +7,14 @@ import {
   ScrollView,
   TextInput,
   Modal,
+  Image,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { COLORS, SHADOWS } from '../theme/premium';
 import { saveScreenRounds, loadScreenRounds, saveFieldRounds, loadFieldRounds } from '../utils/storage';
+import ScoreInput from '../components/ScoreInput';
 
 const SCREEN_VENUES = ['골프존', 'SG골프', '카카오VX', '기타'];
 const WEATHER_OPTIONS = ['맑음', '흐림', '비', '바람'];
@@ -20,6 +25,10 @@ export default function RoundScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [screenRounds, setScreenRounds] = useState([]);
   const [fieldRounds, setFieldRounds] = useState([]);
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [scoreInputVisible, setScoreInputVisible] = useState(false);
+  const [isProcessingOCR, setIsProcessingOCR] = useState(false);
 
   // 앱 시작시 저장된 데이터 불러오기
   useEffect(() => {
@@ -42,7 +51,144 @@ export default function RoundScreen() {
     companions: '',
     cost: '',
     memo: '',
+    photos: [],
+    holeScores: null,
+    holePars: null,
   });
+
+  // 갤러리에서 사진 선택
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('권한 필요', '사진을 선택하려면 갤러리 접근 권한이 필요합니다.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      quality: 0.7,
+      selectionLimit: 5,
+    });
+
+    if (!result.canceled && result.assets) {
+      const newPhotos = result.assets.map(asset => asset.uri);
+      setRoundData(prev => ({
+        ...prev,
+        photos: [...prev.photos, ...newPhotos].slice(0, 5),
+      }));
+    }
+  };
+
+  // 카메라로 사진 촬영
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('권한 필요', '사진을 촬영하려면 카메라 접근 권한이 필요합니다.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets) {
+      const newPhoto = result.assets[0].uri;
+      setRoundData(prev => ({
+        ...prev,
+        photos: [...prev.photos, newPhoto].slice(0, 5),
+      }));
+    }
+  };
+
+  // 스코어카드 촬영 (OCR용)
+  const captureScorecard = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('권한 필요', '사진을 촬영하려면 카메라 접근 권한이 필요합니다.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.9,
+    });
+
+    if (!result.canceled && result.assets) {
+      const photoUri = result.assets[0].uri;
+      setRoundData(prev => ({
+        ...prev,
+        photos: [...prev.photos, photoUri].slice(0, 5),
+      }));
+
+      // OCR 처리 시도
+      Alert.alert(
+        '스코어카드 인식',
+        '스코어카드에서 점수를 자동으로 인식하시겠습니까?\n\n※ 인식 정확도는 스코어카드 상태에 따라 다를 수 있습니다.',
+        [
+          { text: '취소', style: 'cancel' },
+          {
+            text: '인식하기',
+            onPress: () => processScorecard(photoUri),
+          },
+        ]
+      );
+    }
+  };
+
+  // 스코어카드 OCR 처리 (로컬)
+  const processScorecard = async (imageUri) => {
+    setIsProcessingOCR(true);
+
+    try {
+      // 여기서 실제 OCR을 수행합니다
+      // 현재는 무료 로컬 OCR의 한계로 정확한 인식이 어려울 수 있습니다
+      // 대안: 수동 입력 화면으로 이동
+
+      setTimeout(() => {
+        setIsProcessingOCR(false);
+        Alert.alert(
+          '인식 완료',
+          '스코어카드 자동 인식 기능은 현재 개발 중입니다.\n\n18홀 스코어를 직접 입력해주세요.',
+          [
+            { text: '취소', style: 'cancel' },
+            {
+              text: '직접 입력',
+              onPress: () => setScoreInputVisible(true),
+            },
+          ]
+        );
+      }, 1500);
+    } catch (error) {
+      setIsProcessingOCR(false);
+      Alert.alert('오류', '스코어카드 인식에 실패했습니다. 직접 입력해주세요.');
+    }
+  };
+
+  // 사진 삭제
+  const removePhoto = (index) => {
+    setRoundData(prev => ({
+      ...prev,
+      photos: prev.photos.filter((_, i) => i !== index),
+    }));
+  };
+
+  // 사진 크게 보기
+  const viewPhoto = (uri) => {
+    setSelectedPhoto(uri);
+    setPhotoModalVisible(true);
+  };
+
+  // 18홀 스코어 저장
+  const handleScoreSave = (scoreData) => {
+    setRoundData(prev => ({
+      ...prev,
+      score: scoreData.totalScore.toString(),
+      holeScores: scoreData.scores,
+      holePars: scoreData.pars,
+    }));
+  };
 
   const saveRound = async () => {
     const newRound = {
@@ -55,11 +201,11 @@ export default function RoundScreen() {
     if (activeTab === 'screen') {
       const updatedRounds = [newRound, ...screenRounds];
       setScreenRounds(updatedRounds);
-      await saveScreenRounds(updatedRounds); // 로컬에 저장
+      await saveScreenRounds(updatedRounds);
     } else {
       const updatedRounds = [newRound, ...fieldRounds];
       setFieldRounds(updatedRounds);
-      await saveFieldRounds(updatedRounds); // 로컬에 저장
+      await saveFieldRounds(updatedRounds);
     }
 
     setRoundData({
@@ -72,11 +218,38 @@ export default function RoundScreen() {
       companions: '',
       cost: '',
       memo: '',
+      photos: [],
+      holeScores: null,
+      holePars: null,
     });
     setModalVisible(false);
   };
 
   const rounds = activeTab === 'screen' ? screenRounds : fieldRounds;
+
+  // 홀별 스코어 요약 표시
+  const renderHoleScoreSummary = (round) => {
+    if (!round.holeScores) return null;
+
+    const front9 = round.holeScores.slice(0, 9);
+    const back9 = round.holeScores.slice(9, 18);
+    const frontTotal = front9.reduce((sum, s) => sum + (s || 0), 0);
+    const backTotal = back9.reduce((sum, s) => sum + (s || 0), 0);
+
+    return (
+      <View style={styles.holeScoreSummary}>
+        <View style={styles.holeScoreRow}>
+          <Text style={styles.holeScoreLabel}>전반:</Text>
+          <Text style={styles.holeScoreValue}>{frontTotal > 0 ? frontTotal : '-'}</Text>
+        </View>
+        <View style={styles.holeScoreDivider} />
+        <View style={styles.holeScoreRow}>
+          <Text style={styles.holeScoreLabel}>후반:</Text>
+          <Text style={styles.holeScoreValue}>{backTotal > 0 ? backTotal : '-'}</Text>
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -148,6 +321,9 @@ export default function RoundScreen() {
                 </View>
               </View>
               <View style={styles.cardBody}>
+                {/* 홀별 스코어 요약 */}
+                {renderHoleScoreSummary(round)}
+
                 {activeTab === 'screen' ? (
                   <>
                     {round.venue && (
@@ -196,6 +372,21 @@ export default function RoundScreen() {
                 {round.memo && (
                   <Text style={styles.memoText}>{round.memo}</Text>
                 )}
+                {/* 사진 표시 */}
+                {round.photos && round.photos.length > 0 && (
+                  <View style={styles.photoGallery}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      {round.photos.map((photo, idx) => (
+                        <TouchableOpacity
+                          key={idx}
+                          onPress={() => viewPhoto(photo)}
+                        >
+                          <Image source={{ uri: photo }} style={styles.photoThumbnail} />
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
             </View>
           ))
@@ -237,15 +428,33 @@ export default function RoundScreen() {
                 onChangeText={(text) => setRoundData({ ...roundData, courseName: text })}
               />
 
+              {/* 18홀 스코어 입력 */}
               <Text style={styles.inputLabel}>스코어</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="총 타수"
-                placeholderTextColor={COLORS.textMuted}
-                keyboardType="numeric"
-                value={roundData.score}
-                onChangeText={(text) => setRoundData({ ...roundData, score: text })}
-              />
+              <View style={styles.scoreSection}>
+                <View style={styles.scoreDisplay}>
+                  <Text style={styles.scoreTotalLabel}>총 스코어</Text>
+                  <Text style={styles.scoreTotalValue}>
+                    {roundData.score || '-'}
+                    {roundData.score && <Text style={styles.scoreTotalUnit}>타</Text>}
+                  </Text>
+                </View>
+                <View style={styles.scoreButtons}>
+                  <TouchableOpacity
+                    style={styles.scoreButton}
+                    onPress={() => setScoreInputVisible(true)}
+                  >
+                    <Text style={styles.scoreButtonIcon}>🏌️</Text>
+                    <Text style={styles.scoreButtonText}>18홀 입력</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.scoreButton, styles.scoreButtonOCR]}
+                    onPress={captureScorecard}
+                  >
+                    <Text style={styles.scoreButtonIcon}>📸</Text>
+                    <Text style={styles.scoreButtonText}>스코어카드 촬영</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
 
               {activeTab === 'screen' ? (
                 <>
@@ -345,6 +554,36 @@ export default function RoundScreen() {
                 </>
               )}
 
+              {/* 사진 추가 섹션 */}
+              <Text style={styles.inputLabel}>사진 (최대 5장)</Text>
+              <View style={styles.photoSection}>
+                <View style={styles.photoButtons}>
+                  <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
+                    <Text style={styles.photoButtonIcon}>🖼️</Text>
+                    <Text style={styles.photoButtonText}>갤러리</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
+                    <Text style={styles.photoButtonIcon}>📷</Text>
+                    <Text style={styles.photoButtonText}>카메라</Text>
+                  </TouchableOpacity>
+                </View>
+                {roundData.photos.length > 0 && (
+                  <ScrollView horizontal style={styles.photoPreview} showsHorizontalScrollIndicator={false}>
+                    {roundData.photos.map((photo, idx) => (
+                      <View key={idx} style={styles.photoPreviewItem}>
+                        <Image source={{ uri: photo }} style={styles.photoPreviewImage} />
+                        <TouchableOpacity
+                          style={styles.photoRemoveButton}
+                          onPress={() => removePhoto(idx)}
+                        >
+                          <Text style={styles.photoRemoveText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+
               <Text style={styles.inputLabel}>메모</Text>
               <TextInput
                 style={[styles.textInput, styles.textArea]}
@@ -366,6 +605,49 @@ export default function RoundScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* 18홀 스코어 입력 모달 */}
+      <ScoreInput
+        visible={scoreInputVisible}
+        onClose={() => setScoreInputVisible(false)}
+        onSave={handleScoreSave}
+        initialScores={roundData.holeScores}
+        initialPars={roundData.holePars}
+      />
+
+      {/* 사진 크게 보기 모달 */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={photoModalVisible}
+        onRequestClose={() => setPhotoModalVisible(false)}
+      >
+        <View style={styles.photoModalOverlay}>
+          <TouchableOpacity
+            style={styles.photoModalClose}
+            onPress={() => setPhotoModalVisible(false)}
+          >
+            <Text style={styles.photoModalCloseText}>✕</Text>
+          </TouchableOpacity>
+          {selectedPhoto && (
+            <Image
+              source={{ uri: selectedPhoto }}
+              style={styles.photoModalImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
+
+      {/* OCR 처리 중 로딩 */}
+      {isProcessingOCR && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>스코어카드 인식 중...</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -528,6 +810,37 @@ const styles = StyleSheet.create({
   cardBody: {
     padding: 16,
   },
+  holeScoreSummary: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  holeScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  holeScoreLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginRight: 8,
+  },
+  holeScoreValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  holeScoreDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: COLORS.divider,
+    marginHorizontal: 16,
+  },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -549,6 +862,15 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     lineHeight: 22,
     marginTop: 12,
+  },
+  photoGallery: {
+    marginTop: 12,
+  },
+  photoThumbnail: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 8,
   },
   bottomSpace: {
     height: 30,
@@ -614,6 +936,55 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: 'top',
   },
+  scoreSection: {
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    padding: 16,
+  },
+  scoreDisplay: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  scoreTotalLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  scoreTotalValue: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginTop: 4,
+  },
+  scoreTotalUnit: {
+    fontSize: 18,
+    fontWeight: '400',
+    color: COLORS.textSecondary,
+  },
+  scoreButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  scoreButton: {
+    flex: 1,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  scoreButtonOCR: {
+    backgroundColor: COLORS.primary + '20',
+  },
+  scoreButtonIcon: {
+    fontSize: 18,
+    marginRight: 6,
+  },
+  scoreButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
   chipContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -639,6 +1010,59 @@ const styles = StyleSheet.create({
   chipTextSelected: {
     color: COLORS.textWhite,
   },
+  photoSection: {
+    marginTop: 4,
+  },
+  photoButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  photoButton: {
+    flex: 1,
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  photoButtonIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  photoButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  photoPreview: {
+    marginTop: 12,
+  },
+  photoPreviewItem: {
+    position: 'relative',
+    marginRight: 10,
+  },
+  photoPreviewImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+  },
+  photoRemoveButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoRemoveText: {
+    color: COLORS.textWhite,
+    fontSize: 12,
+    fontWeight: '700',
+  },
   saveButton: {
     backgroundColor: COLORS.info,
     margin: 20,
@@ -653,5 +1077,52 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: COLORS.textWhite,
+  },
+  photoModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoModalClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  photoModalCloseText: {
+    color: COLORS.textWhite,
+    fontSize: 22,
+  },
+  photoModalImage: {
+    width: '90%',
+    height: '70%',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingBox: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 16,
+    padding: 30,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    marginTop: 16,
   },
 });

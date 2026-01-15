@@ -1,22 +1,68 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, SHADOWS } from '../theme/premium';
-import { getTodayQuote } from '../data/quotes';
+import { getTodayQuote, getRandomQuote } from '../data/quotes';
+import { calculateLevel, getLevelTitle, getWeeklyStats, loadScreenRounds, loadFieldRounds } from '../utils/storage';
 
 export default function HomeScreen({ navigation }) {
-  const todayQuote = getTodayQuote();
+  const [quote, setQuote] = useState(getTodayQuote());
+  const [levelInfo, setLevelInfo] = useState(null);
+  const [weeklyStats, setWeeklyStats] = useState(null);
+  const [recentRounds, setRecentRounds] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = async () => {
+    const level = await calculateLevel();
+    const weekly = await getWeeklyStats();
+    const screenRounds = await loadScreenRounds();
+    const fieldRounds = await loadFieldRounds();
+
+    // 최근 라운드 3개
+    const allRounds = [...screenRounds, ...fieldRounds]
+      .sort((a, b) => b.id - a.id)
+      .slice(0, 3);
+
+    setLevelInfo(level);
+    setWeeklyStats(weekly);
+    setRecentRounds(allRounds);
+  };
+
+  // 화면 포커스될 때마다 데이터 새로고침
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const refreshQuote = () => {
+    setQuote(getRandomQuote());
+  };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+      }
+    >
       {/* 상단 헤더 */}
       <View style={styles.header}>
-        <Text style={styles.greeting}>오늘도 화이팅! 🏌️</Text>
+        <Text style={styles.greeting}>오늘도 화이팅!</Text>
         <Text style={styles.date}>
           {new Date().toLocaleDateString('ko-KR', {
             month: 'long',
@@ -26,13 +72,41 @@ export default function HomeScreen({ navigation }) {
         </Text>
       </View>
 
+      {/* 레벨 카드 */}
+      {levelInfo && (
+        <View style={styles.levelCard}>
+          <View style={styles.levelHeader}>
+            <View style={styles.levelBadge}>
+              <Text style={styles.levelNumber}>Lv.{levelInfo.level}</Text>
+            </View>
+            <View style={styles.levelInfo}>
+              <Text style={styles.levelTitle}>{getLevelTitle(levelInfo.level)}</Text>
+              <Text style={styles.levelHours}>총 {levelInfo.totalHours}시간 연습</Text>
+            </View>
+          </View>
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${levelInfo.progressPercent}%` }]} />
+            </View>
+            <Text style={styles.progressText}>
+              다음 레벨까지 {levelInfo.hoursToNextLevel}시간
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* 명언 카드 */}
       <View style={styles.quoteCard}>
-        <View style={styles.quoteIcon}>
-          <Text style={styles.quoteIconText}>💬</Text>
+        <View style={styles.quoteHeader}>
+          <View style={styles.quoteIcon}>
+            <Text style={styles.quoteIconText}>💬</Text>
+          </View>
+          <TouchableOpacity style={styles.refreshButton} onPress={refreshQuote}>
+            <Text style={styles.refreshButtonText}>🔄 다른 명언</Text>
+          </TouchableOpacity>
         </View>
-        <Text style={styles.quoteText}>"{todayQuote.quote}"</Text>
-        <Text style={styles.quoteAuthor}>- {todayQuote.author}</Text>
+        <Text style={styles.quoteText}>"{quote.quote}"</Text>
+        <Text style={styles.quoteAuthor}>- {quote.author}</Text>
       </View>
 
       {/* 이번 주 요약 */}
@@ -41,20 +115,26 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.statsGrid}>
           <View style={styles.statItem}>
             <Text style={styles.statIcon}>⛳</Text>
-            <Text style={styles.statNumber}>0</Text>
+            <Text style={styles.statNumber}>{weeklyStats?.practiceCount || 0}</Text>
             <Text style={styles.statLabel}>연습</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statIcon}>🏆</Text>
-            <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>라운드</Text>
+            <Text style={styles.statIcon}>🖥️</Text>
+            <Text style={styles.statNumber}>{weeklyStats?.screenRoundCount || 0}</Text>
+            <Text style={styles.statLabel}>스크린</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statIcon}>⭐</Text>
-            <Text style={styles.statNumber}>-</Text>
-            <Text style={styles.statLabel}>베스트</Text>
+            <Text style={styles.statIcon}>🏌️</Text>
+            <Text style={styles.statNumber}>{weeklyStats?.fieldRoundCount || 0}</Text>
+            <Text style={styles.statLabel}>필드</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statIcon}>⏱️</Text>
+            <Text style={styles.statNumber}>{Math.floor((weeklyStats?.practiceTime || 0) / 60)}</Text>
+            <Text style={styles.statLabel}>시간</Text>
           </View>
         </View>
       </View>
@@ -105,14 +185,32 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* 최근 기록 */}
+      {/* 최근 라운드 */}
       <View style={styles.recentCard}>
         <Text style={styles.sectionTitle}>최근 라운드</Text>
-        <View style={styles.emptyRecent}>
-          <Text style={styles.emptyIcon}>🏌️</Text>
-          <Text style={styles.emptyText}>아직 기록이 없어요</Text>
-          <Text style={styles.emptyDesc}>첫 라운드를 기록해보세요!</Text>
-        </View>
+        {recentRounds.length === 0 ? (
+          <View style={styles.emptyRecent}>
+            <Text style={styles.emptyIcon}>🏌️</Text>
+            <Text style={styles.emptyText}>아직 기록이 없어요</Text>
+            <Text style={styles.emptyDesc}>첫 라운드를 기록해보세요!</Text>
+          </View>
+        ) : (
+          recentRounds.map(round => (
+            <View key={round.id} style={styles.recentItem}>
+              <View style={styles.recentLeft}>
+                <Text style={styles.recentType}>
+                  {round.type === 'screen' ? '🖥️ 스크린' : '🏌️ 필드'}
+                </Text>
+                <Text style={styles.recentCourse}>{round.course || '골프장'}</Text>
+                <Text style={styles.recentDate}>{round.date}</Text>
+              </View>
+              <View style={styles.recentScore}>
+                <Text style={styles.recentScoreNumber}>{round.score}</Text>
+                <Text style={styles.recentScoreLabel}>타</Text>
+              </View>
+            </View>
+          ))
+        )}
       </View>
 
       <View style={styles.bottomSpace} />
@@ -141,13 +239,76 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     marginTop: 4,
   },
-  quoteCard: {
+  levelCard: {
     backgroundColor: COLORS.cardBg,
     marginHorizontal: 16,
     marginTop: -20,
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     ...SHADOWS.medium,
+  },
+  levelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  levelBadge: {
+    backgroundColor: COLORS.gold,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  levelNumber: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textWhite,
+  },
+  levelInfo: {
+    marginLeft: 14,
+    flex: 1,
+  },
+  levelTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  levelHours: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  progressContainer: {
+    marginTop: 14,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: COLORS.gold,
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 6,
+    textAlign: 'right',
+  },
+  quoteCard: {
+    backgroundColor: COLORS.cardBg,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 20,
+    ...SHADOWS.small,
+  },
+  quoteHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   quoteIcon: {
     width: 44,
@@ -156,10 +317,20 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight + '20',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
   },
   quoteIconText: {
     fontSize: 22,
+  },
+  refreshButton: {
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  refreshButtonText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
   },
   quoteText: {
     fontSize: 18,
@@ -208,16 +379,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.divider,
   },
   statIcon: {
-    fontSize: 28,
+    fontSize: 24,
   },
   statNumber: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: COLORS.primary,
-    marginTop: 8,
+    marginTop: 6,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 4,
   },
@@ -286,6 +457,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textMuted,
     marginTop: 4,
+  },
+  recentItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+  },
+  recentLeft: {
+    flex: 1,
+  },
+  recentType: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  recentCourse: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginTop: 2,
+  },
+  recentDate: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  recentScore: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  recentScoreNumber: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textWhite,
+  },
+  recentScoreLabel: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginLeft: 2,
   },
   bottomSpace: {
     height: 30,
