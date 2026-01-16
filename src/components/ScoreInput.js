@@ -9,7 +9,10 @@ import {
   Modal,
   Alert,
   Dimensions,
+  Platform,
 } from 'react-native';
+
+const isWeb = Platform.OS === 'web';
 import { COLORS, SHADOWS } from '../theme/premium';
 
 const { width } = Dimensions.get('window');
@@ -22,6 +25,7 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
   const [scores, setScores] = useState(Array(18).fill(''));
   const [pars, setPars] = useState(DEFAULT_PARS);
   const [editingHole, setEditingHole] = useState(null);
+  const [inputMode, setInputMode] = useState('strokes'); // 'strokes' 실제 타수, 'diff' 파 대비
 
   useEffect(() => {
     if (visible) {
@@ -77,7 +81,11 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
 
   const handleSave = () => {
     if (totals.filledCount === 0) {
-      Alert.alert('알림', '최소 1홀 이상 스코어를 입력해주세요.');
+      if (isWeb) {
+        window.alert('최소 1홀 이상 스코어를 입력해주세요.');
+      } else {
+        Alert.alert('알림', '최소 1홀 이상 스코어를 입력해주세요.');
+      }
       return;
     }
     onSave({
@@ -91,20 +99,32 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
   };
 
   const fillWithPar = () => {
-    Alert.alert('파로 채우기', '모든 홀을 파로 채울까요?', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '확인',
-        onPress: () => setScores(pars.map(p => p.toString())),
-      },
-    ]);
+    if (isWeb) {
+      if (window.confirm('모든 홀을 파로 채울까요?')) {
+        setScores(pars.map(p => p.toString()));
+      }
+    } else {
+      Alert.alert('파로 채우기', '모든 홀을 파로 채울까요?', [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '확인',
+          onPress: () => setScores(pars.map(p => p.toString())),
+        },
+      ]);
+    }
   };
 
   const resetScores = () => {
-    Alert.alert('초기화', '모든 스코어를 초기화할까요?', [
-      { text: '취소', style: 'cancel' },
-      { text: '확인', onPress: () => setScores(Array(18).fill('')) },
-    ]);
+    if (isWeb) {
+      if (window.confirm('모든 스코어를 초기화할까요?')) {
+        setScores(Array(18).fill(''));
+      }
+    } else {
+      Alert.alert('초기화', '모든 스코어를 초기화할까요?', [
+        { text: '취소', style: 'cancel' },
+        { text: '확인', onPress: () => setScores(Array(18).fill('')) },
+      ]);
+    }
   };
 
   // 스코어 테이블 행 렌더링
@@ -326,33 +346,60 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
               </TouchableOpacity>
             </View>
 
-            {/* 빠른 선택 버튼 */}
+            {/* 골프존 스타일 빠른 선택 버튼 */}
+            <Text style={styles.quickScoreLabel}>파 대비 선택</Text>
             <View style={styles.quickScoreRow}>
-              {editingHole !== null && [
-                pars[editingHole] - 2,
-                pars[editingHole] - 1,
-                pars[editingHole],
-                pars[editingHole] + 1,
-                pars[editingHole] + 2,
-                pars[editingHole] + 3,
-              ].filter(v => v > 0).map(val => (
-                <TouchableOpacity
-                  key={val}
-                  style={[
-                    styles.quickScoreBtn,
-                    parseInt(scores[editingHole]) === val && styles.quickScoreBtnActive
-                  ]}
-                  onPress={() => {
-                    updateScore(editingHole, val.toString());
-                    setTimeout(() => setEditingHole(null), 150);
-                  }}
-                >
-                  <Text style={[
-                    styles.quickScoreText,
-                    parseInt(scores[editingHole]) === val && styles.quickScoreTextActive
-                  ]}>{val}</Text>
-                </TouchableOpacity>
-              ))}
+              {editingHole !== null && (() => {
+                const par = pars[editingHole];
+                const doublePar = par * 2; // 더블파(양파)
+
+                // 스코어 옵션 생성
+                const options = [
+                  { score: 1, label: '홀인원', color: '#FFD700' }, // 골드
+                  { score: par - 3, label: '알바', color: '#9C27B0' }, // 알바트로스
+                  { score: par - 2, label: '이글', color: COLORS.scoreEagle },
+                  { score: par - 1, label: '버디', color: COLORS.scoreBirdie },
+                  { score: par, label: '파', color: COLORS.scorePar },
+                  { score: par + 1, label: '보기', color: COLORS.scoreBogey },
+                  { score: par + 2, label: '더블', color: COLORS.scoreDouble },
+                  { score: par + 3, label: '+3', color: COLORS.scoreTriple },
+                  { score: doublePar, label: '양파', color: '#4A148C' }, // 더블파
+                ].filter(item => item.score > 0 && item.score <= doublePar);
+
+                // 중복 제거 (홀인원과 버디/이글이 같은 경우 등)
+                const uniqueOptions = options.reduce((acc, item) => {
+                  if (!acc.find(x => x.score === item.score)) {
+                    acc.push(item);
+                  }
+                  return acc;
+                }, []);
+
+                return uniqueOptions.map(item => {
+                  const isSelected = parseInt(scores[editingHole]) === item.score;
+                  return (
+                    <TouchableOpacity
+                      key={`${item.label}-${item.score}`}
+                      style={[
+                        styles.quickScoreBtn,
+                        { backgroundColor: isSelected ? item.color : COLORS.backgroundGray }
+                      ]}
+                      onPress={() => {
+                        updateScore(editingHole, item.score.toString());
+                        setTimeout(() => setEditingHole(null), 150);
+                      }}
+                    >
+                      <Text style={[
+                        styles.quickScoreText,
+                        isSelected && { color: '#fff' }
+                      ]}>{item.label}</Text>
+                      <Text style={[
+                        styles.quickScoreNum,
+                        isSelected && { color: '#fff' }
+                      ]}>{item.score}타</Text>
+                    </TouchableOpacity>
+                  );
+                });
+              })()}
             </View>
 
             <TouchableOpacity
@@ -379,6 +426,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '95%',
+    minHeight: '70%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -456,7 +504,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   scrollContent: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
     paddingHorizontal: 12,
   },
   sectionTitle: {
@@ -650,26 +699,40 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: COLORS.textPrimary,
   },
+  quickScoreLabel: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 16,
+    marginBottom: 4,
+  },
   quickScoreRow: {
     flexDirection: 'row',
-    marginTop: 20,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: 8,
   },
   quickScoreBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 10,
     backgroundColor: COLORS.backgroundGray,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 4,
   },
   quickScoreBtnActive: {
     backgroundColor: COLORS.primary,
   },
   quickScoreText: {
-    fontSize: 16,
+    fontSize: 11,
     fontWeight: '600',
     color: COLORS.textSecondary,
+  },
+  quickScoreNum: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginTop: 2,
   },
   quickScoreTextActive: {
     color: COLORS.textWhite,

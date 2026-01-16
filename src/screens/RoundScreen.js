@@ -10,11 +10,16 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+
+const isWeb = Platform.OS === 'web';
 import { COLORS, SHADOWS } from '../theme/premium';
 import { saveScreenRounds, loadScreenRounds, saveFieldRounds, loadFieldRounds } from '../utils/storage';
+import { recognizeScorecard as ocrRecognizeScorecard, loadOCRConfig } from '../utils/ocrService';
 import ScoreInput from '../components/ScoreInput';
+import CourseSelector from '../components/CourseSelector';
 
 const SCREEN_VENUES = ['골프존', 'SG골프', '카카오VX', '기타'];
 const WEATHER_OPTIONS = ['맑음', '흐림', '비', '바람'];
@@ -30,8 +35,12 @@ export default function RoundScreen() {
   const [scoreInputVisible, setScoreInputVisible] = useState(false);
   const [isProcessingOCR, setIsProcessingOCR] = useState(false);
   const [isFromOCR, setIsFromOCR] = useState(false);
+  const [ocrScores, setOcrScores] = useState(null); // OCR로 인식한 스코어
+  const [ocrPars, setOcrPars] = useState(null); // OCR로 인식한 파
   const [editingRound, setEditingRound] = useState(null); // 수정 중인 라운드
   const [isEditMode, setIsEditMode] = useState(false); // 수정 모드 여부
+  const [courseSelectorVisible, setCourseSelectorVisible] = useState(false); // 코스 선택 모달
+  const [selectedCourse, setSelectedCourse] = useState(null); // 선택된 코스
 
   // 앱 시작시 저장된 데이터 불러오기
   useEffect(() => {
@@ -107,21 +116,26 @@ export default function RoundScreen() {
 
   // 스코어카드 사진 선택 (카메라/갤러리 선택)
   const captureScorecard = () => {
-    Alert.alert(
-      '스코어카드 불러오기',
-      '스코어카드 사진을 어떻게 가져올까요?',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '갤러리에서 선택',
-          onPress: pickScorecardFromGallery,
-        },
-        {
-          text: '카메라로 촬영',
-          onPress: takeScorecardPhoto,
-        },
-      ]
-    );
+    if (isWeb) {
+      // 웹에서는 바로 갤러리 선택
+      pickScorecardFromGallery();
+    } else {
+      Alert.alert(
+        '스코어카드 불러오기',
+        '스코어카드 사진을 어떻게 가져올까요?',
+        [
+          { text: '취소', style: 'cancel' },
+          {
+            text: '갤러리에서 선택',
+            onPress: pickScorecardFromGallery,
+          },
+          {
+            text: '카메라로 촬영',
+            onPress: takeScorecardPhoto,
+          },
+        ]
+      );
+    }
   };
 
   // 갤러리에서 스코어카드 선택
@@ -168,33 +182,91 @@ export default function RoundScreen() {
     }));
 
     // OCR 처리 시도
-    Alert.alert(
-      '스코어카드 인식',
-      '스코어카드에서 점수를 자동으로 인식하시겠습니까?\n\n※ 인식 정확도는 스코어카드 상태에 따라 다를 수 있습니다.',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '인식하기',
-          onPress: () => processScorecard(photoUri),
-        },
-      ]
-    );
+    if (isWeb) {
+      // 웹에서는 confirm 사용
+      if (window.confirm('스코어카드에서 점수를 자동으로 인식하시겠습니까?\n\n※ 인식 정확도는 스코어카드 상태에 따라 다를 수 있습니다.')) {
+        processScorecard(photoUri);
+      }
+    } else {
+      Alert.alert(
+        '스코어카드 인식',
+        '스코어카드에서 점수를 자동으로 인식하시겠습니까?\n\n※ 인식 정확도는 스코어카드 상태에 따라 다를 수 있습니다.',
+        [
+          { text: '취소', style: 'cancel' },
+          {
+            text: '인식하기',
+            onPress: () => processScorecard(photoUri),
+          },
+        ]
+      );
+    }
   };
 
-  // 스코어카드 OCR 처리 (로컬)
+  // 스코어카드 처리 - OCR API 호출 후 결과로 입력 화면 열기
   const processScorecard = async (imageUri) => {
     setIsProcessingOCR(true);
 
     try {
-      // 여기서 실제 OCR을 수행합니다
-      // 현재는 무료 로컬 OCR의 한계로 정확한 인식이 어려울 수 있습니다
-      // 대안: 수동 입력 화면으로 이동
+      // OCR 설정 확인
+      const config = await loadOCRConfig();
 
-      setTimeout(() => {
+      if (!config || !config.apiKey) {
+        // OCR 설정 없으면 수동 입력 안내
         setIsProcessingOCR(false);
+        const message = 'OCR API가 설정되지 않았습니다.\n\n' +
+          '설정 > Google Vision OCR 설정에서 API 키를 입력하세요.\n\n' +
+          '지금은 수동으로 입력하시겠습니까?';
+
+        if (isWeb) {
+          if (window.confirm(message)) {
+            setIsFromOCR(true);
+            setOcrScores(null);
+            setOcrPars(null);
+            setScoreInputVisible(true);
+          }
+        } else {
+          Alert.alert(
+            'OCR 설정 필요',
+            message,
+            [
+              { text: '취소', style: 'cancel' },
+              {
+                text: '수동 입력',
+                onPress: () => {
+                  setIsFromOCR(true);
+                  setOcrScores(null);
+                  setOcrPars(null);
+                  setScoreInputVisible(true);
+                },
+              },
+            ]
+          );
+        }
+        return;
+      }
+
+      // OCR API 호출
+      const result = await ocrRecognizeScorecard(imageUri);
+      setIsProcessingOCR(false);
+
+      const recognizedCount = result.recognizedCount || 0;
+      const message = recognizedCount > 0
+        ? `${recognizedCount}개 홀의 스코어를 인식했습니다.\n인식되지 않은 홀은 직접 수정해주세요.`
+        : 'OCR 인식 결과가 없습니다.\n직접 입력해주세요.';
+
+      // OCR 결과 저장
+      setOcrScores(result.scores);
+      setOcrPars(result.pars);
+
+      if (isWeb) {
+        if (window.confirm(message + '\n\n입력 화면을 열까요?')) {
+          setIsFromOCR(true);
+          setScoreInputVisible(true);
+        }
+      } else {
         Alert.alert(
-          '스코어카드 인식',
-          '스코어카드에서 스코어를 분석했습니다.\n\n결과를 확인하고 필요시 수정해주세요.',
+          'OCR 인식 완료',
+          message,
           [
             { text: '취소', style: 'cancel' },
             {
@@ -206,10 +278,38 @@ export default function RoundScreen() {
             },
           ]
         );
-      }, 1500);
+      }
     } catch (error) {
       setIsProcessingOCR(false);
-      Alert.alert('오류', '스코어카드 인식에 실패했습니다. 직접 입력해주세요.');
+      console.error('OCR 처리 실패:', error);
+
+      const errorMessage = error.message || 'OCR 인식에 실패했습니다.';
+
+      if (isWeb) {
+        if (window.confirm(errorMessage + '\n\n수동으로 입력하시겠습니까?')) {
+          setIsFromOCR(true);
+          setOcrScores(null);
+          setOcrPars(null);
+          setScoreInputVisible(true);
+        }
+      } else {
+        Alert.alert(
+          'OCR 실패',
+          errorMessage + '\n\n수동으로 입력하시겠습니까?',
+          [
+            { text: '취소', style: 'cancel' },
+            {
+              text: '수동 입력',
+              onPress: () => {
+                setIsFromOCR(true);
+                setOcrScores(null);
+                setOcrPars(null);
+                setScoreInputVisible(true);
+              },
+            },
+          ]
+        );
+      }
     }
   };
 
@@ -262,6 +362,7 @@ export default function RoundScreen() {
   const openNewMode = () => {
     setEditingRound(null);
     setIsEditMode(false);
+    setSelectedCourse(null);
     setRoundData({
       courseName: '',
       score: '',
@@ -277,6 +378,21 @@ export default function RoundScreen() {
       holePars: null,
     });
     setModalVisible(true);
+  };
+
+  // 코스 선택 처리
+  const handleCourseSelect = (course) => {
+    if (course) {
+      setSelectedCourse(course);
+      setRoundData(prev => ({
+        ...prev,
+        courseName: course.name,
+        holePars: course.holes,
+      }));
+    } else {
+      // 직접 입력 모드
+      setSelectedCourse(null);
+    }
   };
 
   // 모달 닫기
@@ -345,32 +461,40 @@ export default function RoundScreen() {
   };
 
   // 라운드 삭제
-  const deleteRound = () => {
+  const deleteRound = async () => {
     if (!editingRound) return;
 
-    Alert.alert(
-      '기록 삭제',
-      '이 라운드 기록을 삭제하시겠습니까?\n삭제된 기록은 복구할 수 없습니다.',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제',
-          style: 'destructive',
-          onPress: async () => {
-            if (editingRound.type === 'screen') {
-              const updatedRounds = screenRounds.filter(r => r.id !== editingRound.id);
-              setScreenRounds(updatedRounds);
-              await saveScreenRounds(updatedRounds);
-            } else {
-              const updatedRounds = fieldRounds.filter(r => r.id !== editingRound.id);
-              setFieldRounds(updatedRounds);
-              await saveFieldRounds(updatedRounds);
-            }
-            closeModal();
+    const doDelete = async () => {
+      if (editingRound.type === 'screen') {
+        const updatedRounds = screenRounds.filter(r => r.id !== editingRound.id);
+        setScreenRounds(updatedRounds);
+        await saveScreenRounds(updatedRounds);
+      } else {
+        const updatedRounds = fieldRounds.filter(r => r.id !== editingRound.id);
+        setFieldRounds(updatedRounds);
+        await saveFieldRounds(updatedRounds);
+      }
+      closeModal();
+    };
+
+    if (isWeb) {
+      if (window.confirm('이 라운드 기록을 삭제하시겠습니까?\n삭제된 기록은 복구할 수 없습니다.')) {
+        await doDelete();
+      }
+    } else {
+      Alert.alert(
+        '기록 삭제',
+        '이 라운드 기록을 삭제하시겠습니까?\n삭제된 기록은 복구할 수 없습니다.',
+        [
+          { text: '취소', style: 'cancel' },
+          {
+            text: '삭제',
+            style: 'destructive',
+            onPress: doDelete,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const rounds = activeTab === 'screen' ? screenRounds : fieldRounds;
@@ -590,13 +714,32 @@ export default function RoundScreen() {
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               <Text style={styles.inputLabel}>코스명</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="코스 이름을 입력하세요"
-                placeholderTextColor={COLORS.textMuted}
-                value={roundData.courseName}
-                onChangeText={(text) => setRoundData({ ...roundData, courseName: text })}
-              />
+              <View style={styles.courseInputRow}>
+                <TextInput
+                  style={[styles.textInput, styles.courseInput]}
+                  placeholder="코스 이름"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={roundData.courseName}
+                  onChangeText={(text) => {
+                    setSelectedCourse(null);
+                    setRoundData({ ...roundData, courseName: text });
+                  }}
+                />
+                <TouchableOpacity
+                  style={styles.courseSearchButton}
+                  onPress={() => setCourseSelectorVisible(true)}
+                >
+                  <Text style={styles.courseSearchIcon}>🔍</Text>
+                  <Text style={styles.courseSearchText}>검색</Text>
+                </TouchableOpacity>
+              </View>
+              {selectedCourse && (
+                <View style={styles.selectedCourseInfo}>
+                  <Text style={styles.selectedCourseText}>
+                    ✓ {selectedCourse.type === 'screen' ? '스크린' : '필드'} · PAR {selectedCourse.totalPar} · 파 정보 자동 설정됨
+                  </Text>
+                </View>
+              )}
 
               {/* 18홀 스코어 입력 */}
               <Text style={styles.inputLabel}>스코어</Text>
@@ -785,11 +928,21 @@ export default function RoundScreen() {
         onClose={() => {
           setScoreInputVisible(false);
           setIsFromOCR(false);
+          setOcrScores(null);
+          setOcrPars(null);
         }}
         onSave={handleScoreSave}
-        initialScores={roundData.holeScores}
-        initialPars={roundData.holePars}
+        initialScores={ocrScores || roundData.holeScores}
+        initialPars={ocrPars || roundData.holePars || (selectedCourse ? selectedCourse.holes : null)}
         fromOCR={isFromOCR}
+      />
+
+      {/* 코스 선택 모달 */}
+      <CourseSelector
+        visible={courseSelectorVisible}
+        onClose={() => setCourseSelectorVisible(false)}
+        onSelect={handleCourseSelect}
+        roundType={activeTab}
       />
 
       {/* 사진 크게 보기 모달 */}
@@ -1132,6 +1285,41 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 16,
     color: COLORS.textPrimary,
+  },
+  courseInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  courseInput: {
+    flex: 1,
+  },
+  courseSearchButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  courseSearchIcon: {
+    fontSize: 16,
+  },
+  courseSearchText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textWhite,
+  },
+  selectedCourseInfo: {
+    backgroundColor: COLORS.primary + '15',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+  },
+  selectedCourseText: {
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: '500',
   },
   textArea: {
     height: 100,

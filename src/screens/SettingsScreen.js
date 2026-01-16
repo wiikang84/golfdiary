@@ -11,12 +11,18 @@ import {
 } from 'react-native';
 import { COLORS, SHADOWS } from '../theme/premium';
 import { loadUserProfile, saveUserProfile, calculateLevel, getLevelTitle } from '../utils/storage';
+import { saveOCRConfig, loadOCRConfig } from '../utils/ocrService';
 
 export default function SettingsScreen() {
   const [nickname, setNickname] = useState('골퍼');
   const [levelInfo, setLevelInfo] = useState(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [tempNickname, setTempNickname] = useState('');
+
+  // OCR 설정 상태
+  const [ocrModalVisible, setOcrModalVisible] = useState(false);
+  const [ocrConfig, setOcrConfig] = useState({ apiKey: '' });
+  const [tempOcrConfig, setTempOcrConfig] = useState({ apiKey: '' });
 
   useEffect(() => {
     loadData();
@@ -27,6 +33,12 @@ export default function SettingsScreen() {
     const level = await calculateLevel();
     setNickname(profile.nickname || '골퍼');
     setLevelInfo(level);
+
+    // OCR 설정 불러오기
+    const savedOcrConfig = await loadOCRConfig();
+    if (savedOcrConfig) {
+      setOcrConfig(savedOcrConfig);
+    }
   };
 
   const handleEditProfile = () => {
@@ -53,6 +65,28 @@ export default function SettingsScreen() {
     Alert.alert('준비 중', '곧 추가될 기능입니다!');
   };
 
+  // OCR 설정 편집
+  const handleEditOCR = () => {
+    setTempOcrConfig(ocrConfig);
+    setOcrModalVisible(true);
+  };
+
+  // OCR 설정 저장
+  const handleSaveOCR = async () => {
+    if (!tempOcrConfig.apiKey.trim()) {
+      Alert.alert('알림', 'Google API 키를 입력해주세요.');
+      return;
+    }
+    const success = await saveOCRConfig(tempOcrConfig);
+    if (success) {
+      setOcrConfig(tempOcrConfig);
+      setOcrModalVisible(false);
+      Alert.alert('저장 완료', 'OCR API 설정이 저장되었습니다.');
+    } else {
+      Alert.alert('오류', '설정 저장에 실패했습니다.');
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* 헤더 */}
@@ -75,6 +109,23 @@ export default function SettingsScreen() {
           </View>
           <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
             <Text style={styles.editButtonText}>수정</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* OCR 설정 섹션 */}
+        <Text style={styles.sectionTitle}>스코어카드 인식 (OCR)</Text>
+        <View style={styles.menuCard}>
+          <TouchableOpacity style={styles.menuItem} onPress={handleEditOCR}>
+            <View style={[styles.menuIcon, { backgroundColor: '#4285F4' + '20' }]}>
+              <Text style={styles.menuIconText}>📸</Text>
+            </View>
+            <View style={styles.menuText}>
+              <Text style={styles.menuTitle}>Google Vision OCR 설정</Text>
+              <Text style={styles.menuDesc}>
+                {ocrConfig.apiKey ? '설정 완료 (월 1,000건 무료)' : 'API 키 설정 필요'}
+              </Text>
+            </View>
+            <Text style={styles.menuArrow}>›</Text>
           </TouchableOpacity>
         </View>
 
@@ -193,6 +244,49 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonSave]}
                 onPress={handleSaveProfile}
+              >
+                <Text style={styles.modalButtonTextSave}>저장</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* OCR 설정 모달 */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={ocrModalVisible}
+        onRequestClose={() => setOcrModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Google Vision OCR 설정</Text>
+            <Text style={styles.ocrHelpText}>
+              Google Cloud Console에서 Vision API를 활성화하고{'\n'}
+              API 키를 생성하여 입력해주세요.{'\n'}
+              (월 1,000건 무료)
+            </Text>
+            <Text style={styles.inputLabelSmall}>Google API Key</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="AIza..."
+              placeholderTextColor={COLORS.textMuted}
+              value={tempOcrConfig.apiKey}
+              onChangeText={(text) => setTempOcrConfig({ ...tempOcrConfig, apiKey: text })}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setOcrModalVisible(false)}
+              >
+                <Text style={styles.modalButtonTextCancel}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSave]}
+                onPress={handleSaveOCR}
               >
                 <Text style={styles.modalButtonTextSave}>저장</Text>
               </TouchableOpacity>
@@ -440,5 +534,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.textWhite,
+  },
+  ocrHelpText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  inputLabelSmall: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
   },
 });
