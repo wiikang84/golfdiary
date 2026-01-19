@@ -843,13 +843,51 @@ export const GOLF_CLUBS = [
   { id: 'pub_tamius', name: '타미우스CC', region: '제주', city: '제주시', type: 'field', membership: 'public', totalHoles: 18 },
 ];
 
+// ========== 스크린 골프 제공업체 ==========
+export const SCREEN_PROVIDERS = ['골프존', 'SG골프', '카카오VX', 'GTOUR'];
+
+// ========== 운영형태 필터 ==========
+export const MEMBERSHIP_TYPES = [
+  { value: 'all', label: '전체' },
+  { value: 'public', label: '대중제' },
+  { value: 'member', label: '회원제' },
+];
+
+// ========== 스크린 골프 코스 데이터 ==========
+export const SCREEN_COURSES = [
+  // 골프존 코스
+  { id: 'screen_golfzon_pinx', name: '핀크스GC', provider: '골프존', holes: [4,5,3,4,4,3,5,4,4,4,3,4,5,4,3,4,5,4], totalPar: 72 },
+  { id: 'screen_golfzon_skyhill', name: '스카이힐CC', provider: '골프존', holes: [4,4,3,5,4,4,3,4,5,4,4,3,5,4,4,3,4,5], totalPar: 72 },
+  { id: 'screen_golfzon_elysian', name: '엘리시안제주', provider: '골프존', holes: [4,5,4,3,4,4,5,3,4,4,5,4,3,4,4,5,3,4], totalPar: 72 },
+  { id: 'screen_golfzon_southspring', name: '사우스스프링스', provider: '골프존', holes: [4,4,5,3,4,4,3,5,4,4,4,5,3,4,4,3,5,4], totalPar: 72 },
+  { id: 'screen_golfzon_bearcreek', name: '베어크리크GC', provider: '골프존', holes: [4,3,5,4,4,4,3,5,4,4,3,5,4,4,4,3,5,4], totalPar: 72 },
+  { id: 'screen_golfzon_montvert', name: '몽베르CC', provider: '골프존', holes: [4,4,3,5,4,4,5,3,4,4,4,3,5,4,4,5,3,4], totalPar: 72 },
+  { id: 'screen_golfzon_lakehills', name: '레이크힐스CC', provider: '골프존', holes: [4,5,3,4,4,4,3,5,4,4,5,3,4,4,4,3,5,4], totalPar: 72 },
+  { id: 'screen_golfzon_blackstone', name: '블랙스톤CC', provider: '골프존', holes: [4,4,5,3,4,4,5,3,4,4,4,5,3,4,4,5,3,4], totalPar: 72 },
+
+  // SG골프 코스
+  { id: 'screen_sg_namseoul', name: '남서울CC', provider: 'SG골프', holes: [4,4,3,5,4,4,3,5,4,4,4,3,5,4,4,3,5,4], totalPar: 72 },
+  { id: 'screen_sg_88cc', name: '88CC', provider: 'SG골프', holes: [4,5,4,3,4,4,5,3,4,4,5,4,3,4,4,5,3,4], totalPar: 72 },
+  { id: 'screen_sg_anyang', name: '안양CC', provider: 'SG골프', holes: [4,4,5,3,4,4,3,5,4,4,4,5,3,4,4,3,5,4], totalPar: 72 },
+  { id: 'screen_sg_hanyang', name: '한양CC', provider: 'SG골프', holes: [4,3,4,5,4,4,3,5,4,4,3,4,5,4,4,3,5,4], totalPar: 72 },
+
+  // 카카오VX 코스
+  { id: 'screen_kakao_ora', name: '오라CC', provider: '카카오VX', holes: [4,4,3,5,4,4,3,5,4,4,4,3,5,4,4,3,5,4], totalPar: 72 },
+  { id: 'screen_kakao_jeju', name: '제주CC', provider: '카카오VX', holes: [4,5,4,3,4,4,5,3,4,4,5,4,3,4,4,5,3,4], totalPar: 72 },
+  { id: 'screen_kakao_haeundae', name: '해운대CC', provider: '카카오VX', holes: [4,4,5,3,4,4,3,5,4,4,4,5,3,4,4,3,5,4], totalPar: 72 },
+
+  // GTOUR 코스
+  { id: 'screen_gtour_pebble', name: '페블비치', provider: 'GTOUR', holes: [4,5,4,4,3,5,3,4,4,4,4,3,4,5,4,3,4,5], totalPar: 72 },
+  { id: 'screen_gtour_standrews', name: '세인트앤드류스', provider: 'GTOUR', holes: [4,4,4,4,5,4,4,3,4,4,3,4,4,5,4,4,3,4], totalPar: 72 },
+];
+
 // ========== 권역별 지역 조회 함수 ==========
 export const getRegionsByGroup = (group) => {
   return REGION_CATEGORIES[group] || [];
 };
 
 // ========== 골프장 검색 함수 ==========
-export const searchClubs = (query = '', region = '전체', regionGroup = '전체') => {
+export const searchClubs = (query = '', region = '전체', regionGroup = '전체', membership = 'all') => {
   let results = [...GOLF_CLUBS];
 
   // 권역 필터
@@ -863,6 +901,11 @@ export const searchClubs = (query = '', region = '전체', regionGroup = '전체
     results = results.filter(club => club.region === region);
   }
 
+  // 운영형태 필터
+  if (membership !== 'all') {
+    results = results.filter(club => club.membership === membership);
+  }
+
   // 검색어 필터
   if (query.trim()) {
     const searchTerm = query.toLowerCase().trim();
@@ -873,6 +916,89 @@ export const searchClubs = (query = '', region = '전체', regionGroup = '전체
   }
 
   return results;
+};
+
+// ========== 스크린 코스 검색 함수 ==========
+export const searchScreenCourses = (query = '', provider = null) => {
+  let results = [...SCREEN_COURSES];
+
+  // 제공업체 필터
+  if (provider) {
+    results = results.filter(course => course.provider === provider);
+  }
+
+  // 검색어 필터
+  if (query.trim()) {
+    const searchTerm = query.toLowerCase().trim();
+    results = results.filter(course =>
+      course.name.toLowerCase().includes(searchTerm) ||
+      course.provider.toLowerCase().includes(searchTerm)
+    );
+  }
+
+  return results;
+};
+
+// ========== 코스 조합 조회 (27홀/36홀 골프장용) ==========
+export const getClubCombinations = (clubId) => {
+  const club = GOLF_CLUBS.find(c => c.id === clubId);
+  if (!club) return [];
+
+  // 18홀 골프장은 단일 조합만 반환
+  if (club.totalHoles === 18) {
+    return [{
+      id: `${clubId}_default`,
+      clubId: clubId,
+      name: '18홀',
+    }];
+  }
+
+  // 27홀 골프장 - 3가지 조합
+  if (club.totalHoles === 27) {
+    return [
+      { id: `${clubId}_ab`, clubId: clubId, name: 'A+B 코스' },
+      { id: `${clubId}_bc`, clubId: clubId, name: 'B+C 코스' },
+      { id: `${clubId}_ca`, clubId: clubId, name: 'C+A 코스' },
+    ];
+  }
+
+  // 36홀 골프장 - 여러 조합
+  if (club.totalHoles === 36) {
+    return [
+      { id: `${clubId}_ab`, clubId: clubId, name: 'A+B 코스' },
+      { id: `${clubId}_cd`, clubId: clubId, name: 'C+D 코스' },
+      { id: `${clubId}_ac`, clubId: clubId, name: 'A+C 코스' },
+      { id: `${clubId}_bd`, clubId: clubId, name: 'B+D 코스' },
+    ];
+  }
+
+  return [];
+};
+
+// ========== 코스 조합의 홀 정보 조회 ==========
+export const getCombinationHoles = (combinationId) => {
+  // 기본 파 정보 (표준 18홀)
+  const defaultPars = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
+
+  // 조합 ID에서 클럽 ID와 조합 타입 추출
+  const parts = combinationId.split('_');
+  const combinationType = parts[parts.length - 1];
+
+  // 기본 홀 정보 반환
+  return {
+    id: combinationId,
+    name: combinationType === 'default' ? '18홀' :
+          combinationType === 'ab' ? 'A+B 코스' :
+          combinationType === 'bc' ? 'B+C 코스' :
+          combinationType === 'ca' ? 'C+A 코스' :
+          combinationType === 'cd' ? 'C+D 코스' :
+          combinationType === 'ac' ? 'A+C 코스' :
+          combinationType === 'bd' ? 'B+D 코스' : '18홀',
+    holes: defaultPars,
+    totalPar: 72,
+    frontName: combinationType.charAt(0).toUpperCase() + '코스',
+    backName: combinationType.charAt(1)?.toUpperCase() + '코스' || 'B코스',
+  };
 };
 
 // ========== 골프장 ID로 조회 ==========
