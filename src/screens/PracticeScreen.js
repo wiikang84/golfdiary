@@ -8,6 +8,7 @@ import {
   TextInput,
   Modal,
   Platform,
+  Alert,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { COLORS, SHADOWS } from '../theme/premium';
@@ -18,6 +19,7 @@ const FOCUS_ITEMS = ['스윙', '임팩트', '어드레스', '그립', '백스윙
 
 export default function PracticeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingPractice, setEditingPractice] = useState(null); // 수정 중인 연습기록
   const [practiceData, setPracticeData] = useState({
     location: '',
     clubs: [],
@@ -73,14 +75,27 @@ export default function PracticeScreen() {
   };
 
   const savePractice = async () => {
-    const newPractice = {
-      ...practiceData,
-      id: Date.now(),
-      date: practiceData.selectedDate.toLocaleDateString('ko-KR'),
-    };
-    const updatedPractices = [newPractice, ...practices];
-    setPractices(updatedPractices);
-    await savePractices(updatedPractices); // 로컬에 저장
+    if (editingPractice) {
+      // 수정 모드
+      const updatedPractices = practices.map(p =>
+        p.id === editingPractice.id
+          ? { ...practiceData, id: editingPractice.id, date: practiceData.selectedDate.toLocaleDateString('ko-KR') }
+          : p
+      );
+      setPractices(updatedPractices);
+      await savePractices(updatedPractices);
+      setEditingPractice(null);
+    } else {
+      // 새 기록 추가
+      const newPractice = {
+        ...practiceData,
+        id: Date.now(),
+        date: practiceData.selectedDate.toLocaleDateString('ko-KR'),
+      };
+      const updatedPractices = [newPractice, ...practices];
+      setPractices(updatedPractices);
+      await savePractices(updatedPractices);
+    }
     setPracticeData({
       location: '',
       clubs: [],
@@ -90,6 +105,54 @@ export default function PracticeScreen() {
       selectedDate: new Date(),
     });
     setModalVisible(false);
+  };
+
+  // 연습기록 수정
+  const handleEditPractice = (practice) => {
+    setEditingPractice(practice);
+    setPracticeData({
+      location: practice.location || '',
+      clubs: practice.clubs || [],
+      practiceTime: practice.practiceTime || '',
+      focus: practice.focus || [],
+      memo: practice.memo || '',
+      selectedDate: practice.selectedDate ? new Date(practice.selectedDate) : new Date(),
+    });
+    setModalVisible(true);
+  };
+
+  // 연습기록 삭제
+  const handleDeletePractice = (practice) => {
+    Alert.alert(
+      '삭제 확인',
+      '이 연습 기록을 삭제하시겠습니까?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            const updatedPractices = practices.filter(p => p.id !== practice.id);
+            setPractices(updatedPractices);
+            await savePractices(updatedPractices);
+          },
+        },
+      ]
+    );
+  };
+
+  // 모달 닫기
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setEditingPractice(null);
+    setPracticeData({
+      location: '',
+      clubs: [],
+      practiceTime: '',
+      focus: [],
+      memo: '',
+      selectedDate: new Date(),
+    });
   };
 
   return (
@@ -149,6 +212,21 @@ export default function PracticeScreen() {
                 {practice.memo && (
                   <Text style={styles.memoText}>{practice.memo}</Text>
                 )}
+                {/* 수정/삭제 버튼 */}
+                <View style={styles.cardActions}>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => handleEditPractice(practice)}
+                  >
+                    <Text style={styles.actionButtonText}>수정</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.deleteButton]}
+                    onPress={() => handleDeletePractice(practice)}
+                  >
+                    <Text style={[styles.actionButtonText, styles.deleteButtonText]}>삭제</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           ))
@@ -161,15 +239,15 @@ export default function PracticeScreen() {
         animationType="slide"
         transparent={true}
         visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={handleCloseModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>새 연습 기록</Text>
+              <Text style={styles.modalTitle}>{editingPractice ? '연습 기록 수정' : '새 연습 기록'}</Text>
               <TouchableOpacity
                 style={styles.closeButton}
-                onPress={() => setModalVisible(false)}
+                onPress={handleCloseModal}
               >
                 <Text style={styles.closeButtonText}>✕</Text>
               </TouchableOpacity>
@@ -440,6 +518,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     lineHeight: 22,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.divider,
+  },
+  actionButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.backgroundGray,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.primary,
+  },
+  deleteButton: {
+    backgroundColor: '#FFEBEE',
+  },
+  deleteButtonText: {
+    color: '#D32F2F',
   },
   bottomSpace: {
     height: 30,
