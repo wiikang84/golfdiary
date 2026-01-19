@@ -25,8 +25,42 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
   const [scores, setScores] = useState(Array(18).fill(''));
   const [pars, setPars] = useState(DEFAULT_PARS);
   const [editingHole, setEditingHole] = useState(null);
+  const [editingParHole, setEditingParHole] = useState(null); // PAR 편집 중인 홀
   const [frontCourseName, setFrontCourseName] = useState(''); // 전반 코스명
   const [backCourseName, setBackCourseName] = useState(''); // 후반 코스명
+
+  // PAR 값 업데이트
+  const updatePar = (index, value) => {
+    const newPars = [...pars];
+    newPars[index] = value;
+    setPars(newPars);
+    setEditingParHole(null);
+  };
+
+  // 스코어 용어 가져오기 (PAR 기준 정확한 용어)
+  const getScoreLabel = (score, par) => {
+    if (!score || isNaN(score)) return null;
+    const diff = score - par;
+
+    // 홀인원 체크 (1타)
+    if (score === 1) {
+      if (par === 3) return { emoji: '🏆', label: '홀인원', subLabel: '이글' };
+      if (par === 4) return { emoji: '🏆', label: '홀인원', subLabel: '알바트로스' };
+      if (par === 5) return { emoji: '🏆', label: '홀인원', subLabel: '콘도르' };
+    }
+
+    if (diff <= -4) return { emoji: '🦅🦅', label: '콘도르' };
+    if (diff === -3) return { emoji: '💎', label: '알바트로스' };
+    if (diff === -2) return { emoji: '🦅', label: '이글' };
+    if (diff === -1) return { emoji: '🐦', label: '버디' };
+    if (diff === 0) return { emoji: '⛳', label: '파' };
+    if (diff === 1) return { emoji: '😅', label: '보기' };
+    if (diff === 2) return { emoji: '😓', label: '더블보기' };
+    if (diff === 3) return { emoji: '😱', label: '트리플보기' };
+    if (diff === 4) return { emoji: '💀', label: '쿼드러플' };
+    if (score >= par * 2) return { emoji: '🔥', label: '더블파' };
+    return { emoji: '😵', label: `+${diff}` };
+  };
 
   useEffect(() => {
     if (visible) {
@@ -164,15 +198,20 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
           </View>
         </View>
 
-        {/* 파 */}
+        {/* 파 - 터치하여 수정 가능 */}
         <View style={styles.tableRow}>
           <View style={[styles.tableCell, styles.labelCell]}>
             <Text style={styles.parLabel}>PAR</Text>
           </View>
           {holes.map(h => (
-            <View key={h} style={styles.tableCell}>
+            <TouchableOpacity
+              key={h}
+              style={[styles.tableCell, styles.parCell]}
+              onPress={() => setEditingParHole(h)}
+            >
               <Text style={styles.parValue}>{pars[h]}</Text>
-            </View>
+              <Text style={styles.parEditHint}>✏️</Text>
+            </TouchableOpacity>
           ))}
           <View style={[styles.tableCell, styles.totalCell]}>
             <Text style={styles.parTotal}>{rowPar}</Text>
@@ -438,6 +477,63 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* PAR 선택 모달 */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={editingParHole !== null}
+        onRequestClose={() => setEditingParHole(null)}
+      >
+        <TouchableOpacity
+          style={styles.editOverlay}
+          activeOpacity={1}
+          onPress={() => setEditingParHole(null)}
+        >
+          <View style={styles.parEditBox}>
+            <Text style={styles.parEditTitle}>
+              {editingParHole !== null ? `${editingParHole + 1}번홀 PAR 설정` : ''}
+            </Text>
+            <Text style={styles.parEditSubtitle}>PAR 값을 선택하세요</Text>
+
+            <View style={styles.parSelectRow}>
+              {[3, 4, 5].map(parValue => {
+                const isSelected = editingParHole !== null && pars[editingParHole] === parValue;
+                return (
+                  <TouchableOpacity
+                    key={parValue}
+                    style={[
+                      styles.parSelectBtn,
+                      isSelected && styles.parSelectBtnActive
+                    ]}
+                    onPress={() => updatePar(editingParHole, parValue)}
+                  >
+                    <Text style={[
+                      styles.parSelectText,
+                      isSelected && styles.parSelectTextActive
+                    ]}>
+                      PAR {parValue}
+                    </Text>
+                    <Text style={[
+                      styles.parSelectEmoji,
+                      isSelected && styles.parSelectTextActive
+                    ]}>
+                      {parValue === 3 ? '⛳' : parValue === 4 ? '🏌️' : '🦅'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={styles.parEditCancel}
+              onPress={() => setEditingParHole(null)}
+            >
+              <Text style={styles.parEditCancelText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </Modal>
   );
 }
@@ -603,10 +699,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textSecondary,
   },
+  parCell: {
+    backgroundColor: COLORS.backgroundGray + '80',
+    position: 'relative',
+  },
   parValue: {
     fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  parEditHint: {
+    fontSize: 6,
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    opacity: 0.5,
   },
   parTotal: {
     fontSize: 12,
@@ -782,5 +889,63 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: COLORS.textWhite,
+  },
+  // PAR 선택 모달
+  parEditBox: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    alignItems: 'center',
+  },
+  parEditTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  parEditSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+    marginBottom: 20,
+  },
+  parSelectRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  parSelectBtn: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
+    backgroundColor: COLORS.backgroundGray,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  parSelectBtnActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  parSelectText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  parSelectTextActive: {
+    color: COLORS.textWhite,
+  },
+  parSelectEmoji: {
+    fontSize: 20,
+    marginTop: 4,
+  },
+  parEditCancel: {
+    marginTop: 20,
+    paddingHorizontal: 40,
+    paddingVertical: 12,
+  },
+  parEditCancelText: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
   },
 });
