@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- 메탈릭 골드 -->
+    <linearGradient id="metalGold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFF8DC"/>
+      <stop offset="25%" style="stop-color:#DAA520"/>
+      <stop offset="50%" style="stop-color:#B8860B"/>
+      <stop offset="75%" style="stop-color:#DAA520"/>
+      <stop offset="100%" style="stop-color:#8B7355"/>
+    </linearGradient>
+
+    <!-- 다크 그린 -->
+    <linearGradient id="darkGreen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2E7D32"/>
+      <stop offset="50%" style="stop-color:#1B5E20"/>
+      <stop offset="100%" style="stop-color:#0D3B11"/>
+    </linearGradient>
+
+    <!-- 그림자 -->
+    <filter id="dropShadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+
+    <!-- 텍스트 그림자 -->
+    <filter id="textShadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- 배경 -->
+  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="url(#darkGreen)"/>
+
+  <!-- 외곽 골드 프레임 -->
+  <rect x="20" y="20" width="472" height="472" rx="100" ry="100" fill="none" stroke="url(#metalGold)" stroke-width="6"/>
+
+  <!-- 큰 골프공 -->
+  <circle cx="256" cy="200" r="120" fill="#FEFEFE" filter="url(#dropShadow)"/>
+
+  <!-- 딤플 패턴 -->
+  <g fill="#E0E0E0">
+    <!-- 상단 줄 -->
+    <circle cx="200" cy="140" r="10"/>
+    <circle cx="230" cy="130" r="10"/>
+    <circle cx="260" cy="125" r="10"/>
+    <circle cx="290" cy="130" r="10"/>
+    <circle cx="320" cy="140" r="10"/>
+    <!-- 2번째 줄 -->
+    <circle cx="175" cy="170" r="10"/>
+    <circle cx="210" cy="160" r="10"/>
+    <circle cx="245" cy="155" r="10"/>
+    <circle cx="280" cy="155" r="10"/>
+    <circle cx="315" cy="160" r="10"/>
+    <circle cx="345" cy="170" r="10"/>
+    <!-- 3번째 줄 -->
+    <circle cx="160" cy="205" r="10"/>
+    <circle cx="195" cy="195" r="10"/>
+    <circle cx="230" cy="190" r="10"/>
+    <circle cx="265" cy="188" r="10"/>
+    <circle cx="300" cy="190" r="10"/>
+    <circle cx="335" cy="195" r="10"/>
+    <circle cx="365" cy="205" r="10"/>
+    <!-- 4번째 줄 -->
+    <circle cx="170" cy="240" r="10"/>
+    <circle cx="205" cy="232" r="10"/>
+    <circle cx="240" cy="228" r="10"/>
+    <circle cx="275" cy="228" r="10"/>
+    <circle cx="310" cy="232" r="10"/>
+    <circle cx="345" cy="240" r="10"/>
+    <!-- 하단 줄 -->
+    <circle cx="190" cy="275" r="10"/>
+    <circle cx="225" cy="270" r="10"/>
+    <circle cx="260" cy="268" r="10"/>
+    <circle cx="295" cy="270" r="10"/>
+    <circle cx="330" cy="275" r="10"/>
+  </g>
+
+  <!-- 골프공 하이라이트 -->
+  <ellipse cx="210" cy="155" rx="45" ry="25" fill="#FFFFFF" opacity="0.5"/>
+
+  <!-- Diary 텍스트 배너 -->
+  <rect x="80" y="350" width="352" height="80" rx="20" ry="20" fill="url(#metalGold)" filter="url(#dropShadow)"/>
+
+  <!-- Diary 텍스트 -->
+  <text x="256" y="408" text-anchor="middle" font-family="Georgia, serif" font-size="52" font-weight="bold" fill="#1B5E20" filter="url(#textShadow)">Diary</text>
+
+  <!-- 골프 클럽 장식 (왼쪽) -->
+  <g transform="rotate(-30, 90, 280)">
+    <rect x="85" y="200" width="10" height="120" rx="3" fill="url(#metalGold)"/>
+    <ellipse cx="90" cy="195" rx="15" ry="8" fill="url(#metalGold)"/>
+  </g>
+
+  <!-- 골프 클럽 장식 (오른쪽) -->
+  <g transform="rotate(30, 422, 280)">
+    <rect x="417" y="200" width="10" height="120" rx="3" fill="url(#metalGold)"/>
+    <ellipse cx="422" cy="195" rx="15" ry="8" fill="url(#metalGold)"/>
+  </g>
+</svg>
