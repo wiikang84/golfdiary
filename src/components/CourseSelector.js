@@ -47,11 +47,15 @@ export default function CourseSelector({ visible, onClose, onSelect, roundType }
 
   // 2단계 선택을 위한 상태
   const [selectedClub, setSelectedClub] = useState(null);
-  const [step, setStep] = useState('list'); // 'list' | 'combinations'
+  const [step, setStep] = useState('list'); // 'list' | 'combinations' | 'custom'
 
   // 결과 목록
   const [fieldClubs, setFieldClubs] = useState([]);
   const [screenCourses, setScreenCourses] = useState([]);
+
+  // 직접입력 상태
+  const [customCourseName, setCustomCourseName] = useState('');
+  const [customCourseType, setCustomCourseType] = useState('field'); // 'field' | 'screen'
 
   // 초기 로드 시 설정
   useEffect(() => {
@@ -71,6 +75,8 @@ export default function CourseSelector({ visible, onClose, onSelect, roundType }
       setSelectedMembership('all');
       setSelectedClub(null);
       setStep('list');
+      setCustomCourseName('');
+      setCustomCourseType(roundType === 'screen' ? 'screen' : 'field');
     }
   }, [visible, roundType]);
 
@@ -165,6 +171,35 @@ export default function CourseSelector({ visible, onClose, onSelect, roundType }
   const handleBack = () => {
     setSelectedClub(null);
     setStep('list');
+    setCustomCourseName('');
+  };
+
+  // 직접입력 화면으로 이동
+  const handleCustomInput = () => {
+    setStep('custom');
+    setCustomCourseName('');
+    setCustomCourseType(selectedType === 'screen' ? 'screen' : 'field');
+  };
+
+  // 직접입력 저장
+  const handleCustomSave = () => {
+    if (!customCourseName.trim()) {
+      return;
+    }
+
+    const defaultPars = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
+
+    onSelect({
+      id: `custom_${Date.now()}`,
+      name: customCourseName.trim(),
+      type: customCourseType,
+      isCustom: true,
+      holes: defaultPars,
+      totalPar: 72,
+      region: customCourseType === 'field' ? '해외/기타' : '',
+      provider: customCourseType === 'screen' ? '기타' : '',
+    });
+    onClose();
   };
 
   // 현재 권역에 해당하는 세부 지역 목록
@@ -291,6 +326,81 @@ export default function CourseSelector({ visible, onClose, onSelect, roundType }
           {combinations.map(renderCombinationItem)}
           <View style={styles.bottomSpace} />
         </ScrollView>
+      </>
+    );
+  };
+
+  // 직접입력 화면
+  const renderCustomInputView = () => {
+    return (
+      <>
+        {/* 헤더 - 뒤로가기 */}
+        <View style={styles.subHeader}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+            <Text style={styles.backButtonText}>‹ 뒤로</Text>
+          </TouchableOpacity>
+          <Text style={styles.subHeaderTitle}>골프장 직접입력</Text>
+          <View style={styles.backButton} />
+        </View>
+
+        <View style={styles.customInputSection}>
+          <Text style={styles.customInputLabel}>🏌️ 골프장/코스 이름</Text>
+          <TextInput
+            style={styles.customInput}
+            placeholder="예: 하와이 카할라 골프장"
+            placeholderTextColor={COLORS.textMuted}
+            value={customCourseName}
+            onChangeText={setCustomCourseName}
+            maxLength={50}
+            autoFocus
+          />
+
+          <Text style={styles.customInputLabel}>타입 선택</Text>
+          <View style={styles.customTypeRow}>
+            <TouchableOpacity
+              style={[
+                styles.customTypeBtn,
+                customCourseType === 'field' && styles.customTypeBtnActive
+              ]}
+              onPress={() => setCustomCourseType('field')}
+            >
+              <Text style={styles.customTypeEmoji}>⛳</Text>
+              <Text style={[
+                styles.customTypeText,
+                customCourseType === 'field' && styles.customTypeTextActive
+              ]}>필드</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.customTypeBtn,
+                customCourseType === 'screen' && styles.customTypeBtnActiveScreen
+              ]}
+              onPress={() => setCustomCourseType('screen')}
+            >
+              <Text style={styles.customTypeEmoji}>🖥️</Text>
+              <Text style={[
+                styles.customTypeText,
+                customCourseType === 'screen' && styles.customTypeTextActive
+              ]}>스크린</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.customHelpText}>
+            ※ 해외 골프장, 미등록 골프장 등을 자유롭게 입력하세요.{'\n'}
+            ※ PAR 정보는 기본값(72)이 적용됩니다.
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.customSaveButton,
+            !customCourseName.trim() && styles.customSaveButtonDisabled
+          ]}
+          onPress={handleCustomSave}
+          disabled={!customCourseName.trim()}
+        >
+          <Text style={styles.customSaveButtonText}>저장하기</Text>
+        </TouchableOpacity>
       </>
     );
   };
@@ -527,7 +637,8 @@ export default function CourseSelector({ visible, onClose, onSelect, roundType }
           {/* 헤더 */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>
-              {step === 'combinations' ? '코스 조합 선택' : '골프장 선택'}
+              {step === 'combinations' ? '코스 조합 선택' :
+               step === 'custom' ? '직접 입력' : '골프장 선택'}
             </Text>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
               <Text style={styles.closeButtonText}>✕</Text>
@@ -535,17 +646,16 @@ export default function CourseSelector({ visible, onClose, onSelect, roundType }
           </View>
 
           {/* 단계별 화면 렌더링 */}
-          {step === 'combinations' ? renderCombinationsView() : renderListView()}
+          {step === 'combinations' ? renderCombinationsView() :
+           step === 'custom' ? renderCustomInputView() : renderListView()}
 
-          {/* 직접 입력 옵션 */}
+          {/* 직접 입력 버튼 */}
           {step === 'list' && (
             <TouchableOpacity
               style={styles.customButton}
-              onPress={() => {
-                onSelect(null); // null 전달 = 직접 입력 모드
-                onClose();
-              }}
+              onPress={handleCustomInput}
             >
+              <Text style={styles.customButtonIcon}>✏️</Text>
               <Text style={styles.customButtonText}>목록에 없음 - 직접 입력</Text>
             </TouchableOpacity>
           )}
@@ -823,13 +933,91 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: COLORS.backgroundGray,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
     borderWidth: 1,
     borderColor: COLORS.divider,
     borderStyle: 'dashed',
+  },
+  customButtonIcon: {
+    fontSize: 16,
   },
   customButtonText: {
     fontSize: 15,
     fontWeight: '500',
     color: COLORS.textSecondary,
+  },
+  // 직접입력 화면 스타일
+  customInputSection: {
+    padding: 20,
+  },
+  customInputLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 10,
+    marginTop: 16,
+  },
+  customInput: {
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+  },
+  customTypeRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  customTypeBtn: {
+    flex: 1,
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  customTypeBtnActive: {
+    backgroundColor: COLORS.primary + '15',
+    borderColor: COLORS.primary,
+  },
+  customTypeBtnActiveScreen: {
+    backgroundColor: COLORS.info + '15',
+    borderColor: COLORS.info,
+  },
+  customTypeEmoji: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  customTypeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  customTypeTextActive: {
+    color: COLORS.textPrimary,
+  },
+  customHelpText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginTop: 20,
+    lineHeight: 20,
+  },
+  customSaveButton: {
+    backgroundColor: COLORS.primary,
+    margin: 16,
+    padding: 18,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  customSaveButtonDisabled: {
+    backgroundColor: COLORS.textMuted,
+  },
+  customSaveButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.textWhite,
   },
 });

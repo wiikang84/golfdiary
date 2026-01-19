@@ -21,11 +21,12 @@ const HOLE_WIDTH = (width - 60) / 9; // 9홀씩 표시
 // 기본 파 설정 (일반적인 파 72 코스)
 const DEFAULT_PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
 
-export default function ScoreInput({ visible, onClose, onSave, initialScores, initialPars, fromOCR }) {
+export default function ScoreInput({ visible, onClose, onSave, initialScores, initialPars, initialCourseNames }) {
   const [scores, setScores] = useState(Array(18).fill(''));
   const [pars, setPars] = useState(DEFAULT_PARS);
   const [editingHole, setEditingHole] = useState(null);
-  const [inputMode, setInputMode] = useState('strokes'); // 'strokes' 실제 타수, 'diff' 파 대비
+  const [frontCourseName, setFrontCourseName] = useState(''); // 전반 코스명
+  const [backCourseName, setBackCourseName] = useState(''); // 후반 코스명
 
   useEffect(() => {
     if (visible) {
@@ -39,8 +40,16 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
       } else {
         setPars(DEFAULT_PARS);
       }
+      // 코스명 초기화
+      if (initialCourseNames) {
+        setFrontCourseName(initialCourseNames.front || '');
+        setBackCourseName(initialCourseNames.back || '');
+      } else {
+        setFrontCourseName('');
+        setBackCourseName('');
+      }
     }
-  }, [visible, initialScores, initialPars]);
+  }, [visible, initialScores, initialPars, initialCourseNames]);
 
   const updateScore = (index, value) => {
     const newScores = [...scores];
@@ -94,6 +103,10 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
       totalScore: totals.total,
       frontScore: totals.front9,
       backScore: totals.back9,
+      courseNames: {
+        front: frontCourseName.trim() || 'OUT',
+        back: backCourseName.trim() || 'IN',
+      },
     });
     onClose();
   };
@@ -210,15 +223,6 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
             </TouchableOpacity>
           </View>
 
-          {/* OCR 안내 메시지 */}
-          {fromOCR && (
-            <View style={styles.ocrNotice}>
-              <Text style={styles.ocrNoticeText}>
-                스코어카드 인식 결과입니다. 틀린 부분을 터치해서 수정하세요.
-              </Text>
-            </View>
-          )}
-
           {/* 총 스코어 요약 */}
           <View style={styles.summaryBar}>
             <View style={styles.summaryItem}>
@@ -246,30 +250,56 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
           </View>
 
           <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {/* 코스명 입력 */}
+            <View style={styles.courseNameSection}>
+              <View style={styles.courseNameRow}>
+                <Text style={styles.courseNameLabel}>전반 코스</Text>
+                <TextInput
+                  style={styles.courseNameInput}
+                  placeholder="예: 레이크, A코스, OUT"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={frontCourseName}
+                  onChangeText={setFrontCourseName}
+                  maxLength={20}
+                />
+              </View>
+              <View style={styles.courseNameRow}>
+                <Text style={styles.courseNameLabel}>후반 코스</Text>
+                <TextInput
+                  style={styles.courseNameInput}
+                  placeholder="예: 밸리, B코스, IN"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={backCourseName}
+                  onChangeText={setBackCourseName}
+                  maxLength={20}
+                />
+              </View>
+            </View>
+
             {/* 전반 9홀 */}
-            <Text style={styles.sectionTitle}>전반 (OUT)</Text>
+            <Text style={styles.sectionTitle}>전반 ({frontCourseName || 'OUT'})</Text>
             {renderScoreRow(0, 'HOLE')}
 
             {/* 후반 9홀 */}
-            <Text style={styles.sectionTitle}>후반 (IN)</Text>
+            <Text style={styles.sectionTitle}>후반 ({backCourseName || 'IN'})</Text>
             {renderScoreRow(9, 'HOLE')}
 
-            {/* 범례 */}
+            {/* 범례 - 이모티콘 버전 */}
             <View style={styles.legend}>
               <View style={[styles.legendItem, { backgroundColor: COLORS.scoreEagle }]}>
-                <Text style={styles.legendText}>이글</Text>
+                <Text style={styles.legendText}>🦅 이글</Text>
               </View>
               <View style={[styles.legendItem, { backgroundColor: COLORS.scoreBirdie }]}>
-                <Text style={styles.legendText}>버디</Text>
+                <Text style={styles.legendText}>🐦 버디</Text>
               </View>
               <View style={[styles.legendItem, { backgroundColor: COLORS.scorePar }]}>
-                <Text style={styles.legendText}>파</Text>
+                <Text style={styles.legendText}>⛳ 파</Text>
               </View>
               <View style={[styles.legendItem, { backgroundColor: COLORS.scoreBogey }]}>
-                <Text style={styles.legendText}>보기</Text>
+                <Text style={styles.legendText}>😅 보기</Text>
               </View>
               <View style={[styles.legendItem, { backgroundColor: COLORS.scoreTriple }]}>
-                <Text style={styles.legendText}>더블+</Text>
+                <Text style={styles.legendText}>💀 더블+</Text>
               </View>
             </View>
 
@@ -353,17 +383,17 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
                 const par = pars[editingHole];
                 const doublePar = par * 2; // 더블파(양파)
 
-                // 스코어 옵션 생성
+                // 스코어 옵션 생성 (이모티콘 포함)
                 const options = [
-                  { score: 1, label: '홀인원', color: '#FFD700' }, // 골드
-                  { score: par - 3, label: '알바', color: '#9C27B0' }, // 알바트로스
-                  { score: par - 2, label: '이글', color: COLORS.scoreEagle },
-                  { score: par - 1, label: '버디', color: COLORS.scoreBirdie },
-                  { score: par, label: '파', color: COLORS.scorePar },
-                  { score: par + 1, label: '보기', color: COLORS.scoreBogey },
-                  { score: par + 2, label: '더블', color: COLORS.scoreDouble },
-                  { score: par + 3, label: '+3', color: COLORS.scoreTriple },
-                  { score: doublePar, label: '양파', color: '#4A148C' }, // 더블파
+                  { score: 1, label: '🏆', subLabel: '홀인원', color: '#FFD700' },
+                  { score: par - 3, label: '💎', subLabel: '알바', color: '#9C27B0' },
+                  { score: par - 2, label: '🦅', subLabel: '이글', color: COLORS.scoreEagle },
+                  { score: par - 1, label: '🐦', subLabel: '버디', color: COLORS.scoreBirdie },
+                  { score: par, label: '⛳', subLabel: '파', color: COLORS.scorePar },
+                  { score: par + 1, label: '😅', subLabel: '보기', color: COLORS.scoreBogey },
+                  { score: par + 2, label: '😓', subLabel: '더블', color: COLORS.scoreDouble },
+                  { score: par + 3, label: '😱', subLabel: '+3', color: COLORS.scoreTriple },
+                  { score: doublePar, label: '💀', subLabel: '양파', color: '#4A148C' },
                 ].filter(item => item.score > 0 && item.score <= doublePar);
 
                 // 중복 제거 (홀인원과 버디/이글이 같은 경우 등)
@@ -378,7 +408,7 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
                   const isSelected = parseInt(scores[editingHole]) === item.score;
                   return (
                     <TouchableOpacity
-                      key={`${item.label}-${item.score}`}
+                      key={`${item.subLabel}-${item.score}`}
                       style={[
                         styles.quickScoreBtn,
                         { backgroundColor: isSelected ? item.color : COLORS.backgroundGray }
@@ -388,14 +418,11 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
                         setTimeout(() => setEditingHole(null), 150);
                       }}
                     >
+                      <Text style={styles.quickScoreEmoji}>{item.label}</Text>
                       <Text style={[
                         styles.quickScoreText,
                         isSelected && { color: '#fff' }
-                      ]}>{item.label}</Text>
-                      <Text style={[
-                        styles.quickScoreNum,
-                        isSelected && { color: '#fff' }
-                      ]}>{item.score}타</Text>
+                      ]}>{item.subLabel}</Text>
                     </TouchableOpacity>
                   );
                 });
@@ -454,18 +481,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.textWhite,
   },
-  ocrNotice: {
-    backgroundColor: COLORS.info + '20',
-    padding: 12,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 10,
-  },
-  ocrNoticeText: {
-    fontSize: 14,
-    color: COLORS.info,
-    textAlign: 'center',
-  },
   summaryBar: {
     flexDirection: 'row',
     backgroundColor: COLORS.backgroundGray,
@@ -507,6 +522,33 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexShrink: 1,
     paddingHorizontal: 12,
+  },
+  courseNameSection: {
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  courseNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 6,
+  },
+  courseNameLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    width: 75,
+  },
+  courseNameInput: {
+    flex: 1,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: COLORS.textPrimary,
   },
   sectionTitle: {
     fontSize: 16,
@@ -712,30 +754,22 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   quickScoreBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 10,
+    width: 56,
+    height: 56,
+    borderRadius: 12,
     backgroundColor: COLORS.backgroundGray,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 4,
   },
-  quickScoreBtnActive: {
-    backgroundColor: COLORS.primary,
+  quickScoreEmoji: {
+    fontSize: 20,
+    marginBottom: 2,
   },
   quickScoreText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: COLORS.textSecondary,
-  },
-  quickScoreNum: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginTop: 2,
-  },
-  quickScoreTextActive: {
-    color: COLORS.textWhite,
   },
   editDone: {
     marginTop: 20,

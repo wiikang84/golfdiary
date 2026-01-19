@@ -9,7 +9,6 @@ import {
   Modal,
   Image,
   Alert,
-  ActivityIndicator,
   Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -17,7 +16,6 @@ import * as ImagePicker from 'expo-image-picker';
 const isWeb = Platform.OS === 'web';
 import { COLORS, SHADOWS } from '../theme/premium';
 import { saveScreenRounds, loadScreenRounds, saveFieldRounds, loadFieldRounds } from '../utils/storage';
-import { recognizeScorecard as ocrRecognizeScorecard, loadOCRConfig } from '../utils/ocrService';
 import ScoreInput from '../components/ScoreInput';
 import CourseSelector from '../components/CourseSelector';
 
@@ -33,10 +31,6 @@ export default function RoundScreen() {
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [scoreInputVisible, setScoreInputVisible] = useState(false);
-  const [isProcessingOCR, setIsProcessingOCR] = useState(false);
-  const [isFromOCR, setIsFromOCR] = useState(false);
-  const [ocrScores, setOcrScores] = useState(null); // OCR로 인식한 스코어
-  const [ocrPars, setOcrPars] = useState(null); // OCR로 인식한 파
   const [editingRound, setEditingRound] = useState(null); // 수정 중인 라운드
   const [isEditMode, setIsEditMode] = useState(false); // 수정 모드 여부
   const [courseSelectorVisible, setCourseSelectorVisible] = useState(false); // 코스 선택 모달
@@ -111,205 +105,6 @@ export default function RoundScreen() {
         ...prev,
         photos: [...prev.photos, newPhoto].slice(0, 5),
       }));
-    }
-  };
-
-  // 스코어카드 사진 선택 (카메라/갤러리 선택)
-  const captureScorecard = () => {
-    if (isWeb) {
-      // 웹에서는 바로 갤러리 선택
-      pickScorecardFromGallery();
-    } else {
-      Alert.alert(
-        '스코어카드 불러오기',
-        '스코어카드 사진을 어떻게 가져올까요?',
-        [
-          { text: '취소', style: 'cancel' },
-          {
-            text: '갤러리에서 선택',
-            onPress: pickScorecardFromGallery,
-          },
-          {
-            text: '카메라로 촬영',
-            onPress: takeScorecardPhoto,
-          },
-        ]
-      );
-    }
-  };
-
-  // 갤러리에서 스코어카드 선택
-  const pickScorecardFromGallery = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('권한 필요', '사진을 선택하려면 갤러리 접근 권한이 필요합니다.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.9,
-    });
-
-    if (!result.canceled && result.assets) {
-      handleScorecardSelected(result.assets[0].uri);
-    }
-  };
-
-  // 카메라로 스코어카드 촬영
-  const takeScorecardPhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('권한 필요', '사진을 촬영하려면 카메라 접근 권한이 필요합니다.');
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.9,
-    });
-
-    if (!result.canceled && result.assets) {
-      handleScorecardSelected(result.assets[0].uri);
-    }
-  };
-
-  // 스코어카드 선택 후 처리
-  const handleScorecardSelected = (photoUri) => {
-    setRoundData(prev => ({
-      ...prev,
-      photos: [...prev.photos, photoUri].slice(0, 5),
-    }));
-
-    // OCR 처리 시도
-    if (isWeb) {
-      // 웹에서는 confirm 사용
-      if (window.confirm('스코어카드에서 점수를 자동으로 인식하시겠습니까?\n\n※ 인식 정확도는 스코어카드 상태에 따라 다를 수 있습니다.')) {
-        processScorecard(photoUri);
-      }
-    } else {
-      Alert.alert(
-        '스코어카드 인식',
-        '스코어카드에서 점수를 자동으로 인식하시겠습니까?\n\n※ 인식 정확도는 스코어카드 상태에 따라 다를 수 있습니다.',
-        [
-          { text: '취소', style: 'cancel' },
-          {
-            text: '인식하기',
-            onPress: () => processScorecard(photoUri),
-          },
-        ]
-      );
-    }
-  };
-
-  // 스코어카드 처리 - OCR API 호출 후 결과로 입력 화면 열기
-  const processScorecard = async (imageUri) => {
-    setIsProcessingOCR(true);
-
-    try {
-      // OCR 설정 확인
-      const config = await loadOCRConfig();
-
-      if (!config || !config.apiKey) {
-        // OCR 설정 없으면 수동 입력 안내
-        setIsProcessingOCR(false);
-        const message = 'OCR API가 설정되지 않았습니다.\n\n' +
-          '설정 > Google Vision OCR 설정에서 API 키를 입력하세요.\n\n' +
-          '지금은 수동으로 입력하시겠습니까?';
-
-        if (isWeb) {
-          if (window.confirm(message)) {
-            setIsFromOCR(true);
-            setOcrScores(null);
-            setOcrPars(null);
-            setScoreInputVisible(true);
-          }
-        } else {
-          Alert.alert(
-            'OCR 설정 필요',
-            message,
-            [
-              { text: '취소', style: 'cancel' },
-              {
-                text: '수동 입력',
-                onPress: () => {
-                  setIsFromOCR(true);
-                  setOcrScores(null);
-                  setOcrPars(null);
-                  setScoreInputVisible(true);
-                },
-              },
-            ]
-          );
-        }
-        return;
-      }
-
-      // OCR API 호출
-      const result = await ocrRecognizeScorecard(imageUri);
-      setIsProcessingOCR(false);
-
-      const recognizedCount = result.recognizedCount || 0;
-      const message = recognizedCount > 0
-        ? `${recognizedCount}개 홀의 스코어를 인식했습니다.\n인식되지 않은 홀은 직접 수정해주세요.`
-        : 'OCR 인식 결과가 없습니다.\n직접 입력해주세요.';
-
-      // OCR 결과 저장
-      setOcrScores(result.scores);
-      setOcrPars(result.pars);
-
-      if (isWeb) {
-        if (window.confirm(message + '\n\n입력 화면을 열까요?')) {
-          setIsFromOCR(true);
-          setScoreInputVisible(true);
-        }
-      } else {
-        Alert.alert(
-          'OCR 인식 완료',
-          message,
-          [
-            { text: '취소', style: 'cancel' },
-            {
-              text: '확인 및 수정',
-              onPress: () => {
-                setIsFromOCR(true);
-                setScoreInputVisible(true);
-              },
-            },
-          ]
-        );
-      }
-    } catch (error) {
-      setIsProcessingOCR(false);
-      console.error('OCR 처리 실패:', error);
-
-      const errorMessage = error.message || 'OCR 인식에 실패했습니다.';
-
-      if (isWeb) {
-        if (window.confirm(errorMessage + '\n\n수동으로 입력하시겠습니까?')) {
-          setIsFromOCR(true);
-          setOcrScores(null);
-          setOcrPars(null);
-          setScoreInputVisible(true);
-        }
-      } else {
-        Alert.alert(
-          'OCR 실패',
-          errorMessage + '\n\n수동으로 입력하시겠습니까?',
-          [
-            { text: '취소', style: 'cancel' },
-            {
-              text: '수동 입력',
-              onPress: () => {
-                setIsFromOCR(true);
-                setOcrScores(null);
-                setOcrPars(null);
-                setScoreInputVisible(true);
-              },
-            },
-          ]
-        );
-      }
     }
   };
 
@@ -751,25 +546,13 @@ export default function RoundScreen() {
                     {roundData.score && <Text style={styles.scoreTotalUnit}>타</Text>}
                   </Text>
                 </View>
-                <View style={styles.scoreButtons}>
-                  <TouchableOpacity
-                    style={styles.scoreButton}
-                    onPress={() => {
-                      setIsFromOCR(false);
-                      setScoreInputVisible(true);
-                    }}
-                  >
-                    <Text style={styles.scoreButtonIcon}>🏌️</Text>
-                    <Text style={styles.scoreButtonText}>18홀 입력</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.scoreButton, styles.scoreButtonOCR]}
-                    onPress={captureScorecard}
-                  >
-                    <Text style={styles.scoreButtonIcon}>📸</Text>
-                    <Text style={styles.scoreButtonText}>스코어카드 촬영</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  style={styles.scoreButton}
+                  onPress={() => setScoreInputVisible(true)}
+                >
+                  <Text style={styles.scoreButtonIcon}>🏌️</Text>
+                  <Text style={styles.scoreButtonText}>18홀 스코어 입력</Text>
+                </TouchableOpacity>
               </View>
 
               {activeTab === 'screen' ? (
@@ -925,16 +708,10 @@ export default function RoundScreen() {
       {/* 18홀 스코어 입력 모달 */}
       <ScoreInput
         visible={scoreInputVisible}
-        onClose={() => {
-          setScoreInputVisible(false);
-          setIsFromOCR(false);
-          setOcrScores(null);
-          setOcrPars(null);
-        }}
+        onClose={() => setScoreInputVisible(false)}
         onSave={handleScoreSave}
-        initialScores={ocrScores || roundData.holeScores}
-        initialPars={ocrPars || roundData.holePars || (selectedCourse ? selectedCourse.holes : null)}
-        fromOCR={isFromOCR}
+        initialScores={roundData.holeScores}
+        initialPars={roundData.holePars || (selectedCourse ? selectedCourse.holes : null)}
       />
 
       {/* 코스 선택 모달 */}
@@ -969,15 +746,6 @@ export default function RoundScreen() {
         </View>
       </Modal>
 
-      {/* OCR 처리 중 로딩 */}
-      {isProcessingOCR && (
-        <View style={styles.loadingOverlay}>
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.loadingText}>스코어카드 인식 중...</Text>
-          </View>
-        </View>
-      )}
     </View>
   );
 }
@@ -1349,21 +1117,13 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: COLORS.textSecondary,
   },
-  scoreButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
   scoreButton: {
-    flex: 1,
-    backgroundColor: COLORS.cardBg,
+    backgroundColor: COLORS.primary,
     borderRadius: 12,
     padding: 14,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-  },
-  scoreButtonOCR: {
-    backgroundColor: COLORS.primary + '20',
   },
   scoreButtonIcon: {
     fontSize: 18,
@@ -1372,7 +1132,7 @@ const styles = StyleSheet.create({
   scoreButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+    color: COLORS.textWhite,
   },
   chipContainer: {
     flexDirection: 'row',
@@ -1492,26 +1252,5 @@ const styles = StyleSheet.create({
   photoModalImage: {
     width: '90%',
     height: '70%',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingBox: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 16,
-    padding: 30,
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: COLORS.textPrimary,
-    marginTop: 16,
   },
 });
