@@ -944,6 +944,19 @@ export const getClubCombinations = (clubId) => {
   const club = GOLF_CLUBS.find(c => c.id === clubId);
   if (!club) return [];
 
+  // COURSE_DATA에 실제 코스 정보가 있는 경우 해당 데이터 사용
+  const courseData = COURSE_DATA[clubId];
+  if (courseData && courseData.combinations) {
+    return courseData.combinations.map(combo => ({
+      id: combo.id,
+      clubId: clubId,
+      name: combo.name,
+      front: combo.front,
+      back: combo.back,
+    }));
+  }
+
+  // COURSE_DATA가 없는 경우 기본 조합 반환
   // 18홀 골프장은 단일 조합만 반환
   if (club.totalHoles === 18) {
     return [{
@@ -980,11 +993,36 @@ export const getCombinationHoles = (combinationId) => {
   // 기본 파 정보 (표준 18홀)
   const defaultPars = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
 
-  // 조합 ID에서 클럽 ID와 조합 타입 추출
+  // COURSE_DATA에서 실제 코스 정보 찾기
+  for (const [clubId, data] of Object.entries(COURSE_DATA)) {
+    if (data.combinations) {
+      const combo = data.combinations.find(c => c.id === combinationId);
+      if (combo) {
+        const frontCourse = data.courses[combo.front];
+        const backCourse = data.courses[combo.back];
+
+        if (frontCourse && backCourse) {
+          const holes = [...frontCourse.pars, ...backCourse.pars];
+          const totalPar = holes.reduce((sum, par) => sum + par, 0);
+
+          return {
+            id: combinationId,
+            name: combo.name,
+            holes: holes,
+            totalPar: totalPar,
+            frontName: frontCourse.name + '코스',
+            backName: backCourse.name + '코스',
+          };
+        }
+      }
+    }
+  }
+
+  // 조합 ID에서 클럽 ID와 조합 타입 추출 (기존 로직 - fallback)
   const parts = combinationId.split('_');
   const combinationType = parts[parts.length - 1];
 
-  // 기본 홀 정보 반환
+  // 기본 홀 정보 반환 (COURSE_DATA에 없는 경우)
   return {
     id: combinationId,
     name: combinationType === 'default' ? '18홀' :
@@ -1027,4 +1065,715 @@ export const getClubCountByGroup = () => {
 // ========== 전체 대중제 골프장 수 ==========
 export const getTotalPublicClubCount = () => {
   return GOLF_CLUBS.length;
+};
+
+// ========== 실제 골프장 코스 데이터 (홀별 PAR 정보) ==========
+// 각 골프장의 실제 코스 정보를 저장합니다.
+// courses: 9홀 단위의 코스 정보
+// combinations: 18홀 조합 정보 (전반 + 후반)
+export const COURSE_DATA = {
+  // ==================== 경기도 ====================
+
+  // 용인퍼블릭CC (18홀) - 용인코스 + 석천코스
+  'pub_yonginpublic': {
+    courses: {
+      'yongin': {
+        name: '용인',
+        pars: [4, 5, 3, 4, 4, 4, 3, 4, 5],  // 36 (9홀)
+      },
+      'seokcheon': {
+        name: '석천',
+        pars: [4, 3, 4, 5, 4, 3, 4, 4, 5],  // 36 (9홀)
+      },
+    },
+    combinations: [
+      { id: 'pub_yonginpublic_yongin_seokcheon', front: 'yongin', back: 'seokcheon', name: '용인+석천' },
+    ],
+  },
+
+  // 스카이밸리CC (36홀) - 스카이, 밸리, 레이크, 마운틴 코스 (공식 홈페이지 확인)
+  'pub_skyvalley': {
+    courses: {
+      'sky': { name: '스카이', pars: [4, 5, 4, 3, 5, 4, 3, 4, 4] },      // 36 (회원제)
+      'valley': { name: '밸리', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },     // 36 (회원제)
+      'lake': { name: '레이크', pars: [4, 4, 3, 4, 4, 5, 3, 4, 5] },     // 36 (대중제)
+      'mountain': { name: '마운틴', pars: [4, 4, 4, 5, 3, 4, 5, 3, 4] }, // 36 (대중제)
+    },
+    combinations: [
+      { id: 'pub_skyvalley_sky_valley', front: 'sky', back: 'valley', name: '스카이+밸리' },
+      { id: 'pub_skyvalley_lake_mountain', front: 'lake', back: 'mountain', name: '레이크+마운틴' },
+      { id: 'pub_skyvalley_sky_lake', front: 'sky', back: 'lake', name: '스카이+레이크' },
+      { id: 'pub_skyvalley_valley_mountain', front: 'valley', back: 'mountain', name: '밸리+마운틴' },
+      { id: 'pub_skyvalley_sky_mountain', front: 'sky', back: 'mountain', name: '스카이+마운틴' },
+      { id: 'pub_skyvalley_valley_lake', front: 'valley', back: 'lake', name: '밸리+레이크' },
+    ],
+  },
+
+  // 골프존카운티여주 (27홀) - 힐, 레이크, 밸리 코스
+  'pub_golfzonyeoju': {
+    courses: {
+      'hill': { name: '힐', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'lake': { name: '레이크', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },  // 36
+      'valley': { name: '밸리', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },  // 36
+    },
+    combinations: [
+      { id: 'pub_golfzonyeoju_hill_lake', front: 'hill', back: 'lake', name: '힐+레이크' },
+      { id: 'pub_golfzonyeoju_lake_valley', front: 'lake', back: 'valley', name: '레이크+밸리' },
+      { id: 'pub_golfzonyeoju_valley_hill', front: 'valley', back: 'hill', name: '밸리+힐' },
+    ],
+  },
+
+  // 베어크리크GC 포천 (36홀) - 베어코스(한국잔디), 크리크코스(양잔디)
+  'pub_bearcreek': {
+    courses: {
+      'bear_out': { name: '베어OUT', pars: [4, 3, 4, 5, 4, 4, 3, 4, 5] },   // 36
+      'bear_in': { name: '베어IN', pars: [4, 4, 3, 5, 4, 4, 3, 5, 4] },     // 36
+      'creek_out': { name: '크리크OUT', pars: [4, 4, 3, 5, 4, 3, 4, 4, 5] }, // 36
+      'creek_in': { name: '크리크IN', pars: [5, 4, 3, 4, 4, 3, 4, 4, 5] },   // 36
+    },
+    combinations: [
+      { id: 'pub_bearcreek_bear', front: 'bear_out', back: 'bear_in', name: '베어코스 18홀' },
+      { id: 'pub_bearcreek_creek', front: 'creek_out', back: 'creek_in', name: '크리크코스 18홀' },
+    ],
+  },
+
+  // 포천힐스CC (27홀) - 가든, 팰리스, 캐슬 코스 (공식 홈페이지 확인)
+  'pub_pocheonhills': {
+    courses: {
+      'garden': { name: '가든', pars: [5, 4, 5, 3, 4, 3, 4, 4, 4] },     // 36
+      'palace': { name: '팰리스', pars: [5, 3, 4, 5, 3, 4, 3, 4, 5] },   // 36
+      'castle': { name: '캐슬', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },     // 36
+    },
+    combinations: [
+      { id: 'pub_pocheonhills_garden_palace', front: 'garden', back: 'palace', name: '가든+팰리스' },
+      { id: 'pub_pocheonhills_palace_castle', front: 'palace', back: 'castle', name: '팰리스+캐슬' },
+      { id: 'pub_pocheonhills_castle_garden', front: 'castle', back: 'garden', name: '캐슬+가든' },
+    ],
+  },
+
+  // 아도니스CC (27홀) - 웨스트, 미들, 이스트 코스
+  'pub_adonis': {
+    courses: {
+      'west': { name: '웨스트', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },   // 36
+      'middle': { name: '미들', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },   // 36
+      'east': { name: '이스트', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },   // 36
+    },
+    combinations: [
+      { id: 'pub_adonis_west_middle', front: 'west', back: 'middle', name: '웨스트+미들' },
+      { id: 'pub_adonis_middle_east', front: 'middle', back: 'east', name: '미들+이스트' },
+      { id: 'pub_adonis_east_west', front: 'east', back: 'west', name: '이스트+웨스트' },
+    ],
+  },
+
+  // 사우스스프링스CC (27홀) - 레이크, 밸리, 힐 코스
+  'pub_southsprings': {
+    courses: {
+      'lake': { name: '레이크', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },
+      'valley': { name: '밸리', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },
+      'hill': { name: '힐', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },
+    },
+    combinations: [
+      { id: 'pub_southsprings_lake_valley', front: 'lake', back: 'valley', name: '레이크+밸리' },
+      { id: 'pub_southsprings_valley_hill', front: 'valley', back: 'hill', name: '밸리+힐' },
+      { id: 'pub_southsprings_hill_lake', front: 'hill', back: 'lake', name: '힐+레이크' },
+    ],
+  },
+
+  // 로제비앙CC (27홀) - 로제, 비앙, 네오 코스
+  'pub_rosevien': {
+    courses: {
+      'rose': { name: '로제', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },   // 36
+      'biang': { name: '비앙', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },  // 36
+      'neo': { name: '네오', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },    // 36
+    },
+    combinations: [
+      { id: 'pub_rosevien_rose_biang', front: 'rose', back: 'biang', name: '로제+비앙' },
+      { id: 'pub_rosevien_biang_neo', front: 'biang', back: 'neo', name: '비앙+네오' },
+      { id: 'pub_rosevien_neo_rose', front: 'neo', back: 'rose', name: '네오+로제' },
+    ],
+  },
+
+  // 가평베네스트CC (27홀) - 파인, 메이플, 버치 코스 (잭 니클라우스 설계)
+  'pub_gapyeong': {
+    courses: {
+      'pine': { name: '파인', pars: [4, 4, 3, 5, 4, 4, 3, 5, 4] },     // 36
+      'maple': { name: '메이플', pars: [4, 4, 3, 5, 4, 4, 3, 5, 4] },  // 36
+      'birch': { name: '버치', pars: [4, 4, 3, 5, 4, 5, 3, 4, 4] },    // 36 (par3 3개, par5 3개)
+    },
+    combinations: [
+      { id: 'pub_gapyeong_pine_maple', front: 'pine', back: 'maple', name: '파인+메이플' },
+      { id: 'pub_gapyeong_maple_birch', front: 'maple', back: 'birch', name: '메이플+버치' },
+      { id: 'pub_gapyeong_birch_pine', front: 'birch', back: 'pine', name: '버치+파인' },
+    ],
+  },
+
+  // 골프존카운티안성 (27홀) - 파인, 오크, 메이플 코스
+  'pub_golfzonansong': {
+    courses: {
+      'pine': { name: '파인', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },
+      'oak': { name: '오크', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },
+      'maple': { name: '메이플', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },
+    },
+    combinations: [
+      { id: 'pub_golfzonansong_pine_oak', front: 'pine', back: 'oak', name: '파인+오크' },
+      { id: 'pub_golfzonansong_oak_maple', front: 'oak', back: 'maple', name: '오크+메이플' },
+      { id: 'pub_golfzonansong_maple_pine', front: 'maple', back: 'pine', name: '메이플+파인' },
+    ],
+  },
+
+  // 대유몽베르CC (36홀) - 브렝땅/에떼(회원제), 오똔/이베르(대중제)
+  'pub_daeyumongbel': {
+    courses: {
+      'printemps': { name: '브렝땅', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 봄
+      'ete': { name: '에떼', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },          // 여름
+      'automne': { name: '오똔', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },      // 가을 (대중제)
+      'hiver': { name: '이베르', pars: [4, 4, 3, 5, 4, 4, 3, 5, 4] },      // 겨울 (대중제)
+    },
+    combinations: [
+      { id: 'pub_daeyumongbel_automne_hiver', front: 'automne', back: 'hiver', name: '오똔+이베르 (대중제)' },
+      { id: 'pub_daeyumongbel_printemps_ete', front: 'printemps', back: 'ete', name: '브렝땅+에떼 (회원제)' },
+    ],
+  },
+
+  // 인서울27골프클럽 (27홀) - EAST, WEST, SOUTH 코스
+  'pub_inseroul27': {
+    courses: {
+      'east': { name: 'EAST', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },
+      'west': { name: 'WEST', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },
+      'south': { name: 'SOUTH', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },
+    },
+    combinations: [
+      { id: 'pub_inseroul27_east_west', front: 'east', back: 'west', name: 'EAST+WEST' },
+      { id: 'pub_inseroul27_west_south', front: 'west', back: 'south', name: 'WEST+SOUTH' },
+      { id: 'pub_inseroul27_south_east', front: 'south', back: 'east', name: 'SOUTH+EAST' },
+    ],
+  },
+
+  // ==================== 인천 ====================
+
+  // 드림파크CC (36홀) - 드림코스, 파크코스 (공식 홈페이지 확인)
+  'pub_dreampark': {
+    courses: {
+      'dream_out': { name: '드림OUT', pars: [4, 4, 4, 5, 3, 4, 4, 3, 5] },   // 36
+      'dream_in': { name: '드림IN', pars: [4, 4, 5, 3, 4, 4, 5, 3, 4] },     // 36
+      'park_out': { name: '파크OUT', pars: [4, 4, 5, 4, 3, 4, 5, 3, 4] },    // 36
+      'park_in': { name: '파크IN', pars: [4, 5, 3, 4, 4, 3, 5, 4, 4] },      // 36
+    },
+    combinations: [
+      { id: 'pub_dreampark_dream', front: 'dream_out', back: 'dream_in', name: '드림코스 18홀' },
+      { id: 'pub_dreampark_park', front: 'park_out', back: 'park_in', name: '파크코스 18홀' },
+      { id: 'pub_dreampark_dream_park', front: 'dream_out', back: 'park_out', name: '드림OUT+파크OUT' },
+    ],
+  },
+
+  // 스카이72 오션코스 (18홀) - 니클라우스 설계
+  'pub_sky72ocean': {
+    courses: {
+      'ocean_out': { name: '오션OUT', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },   // 36
+      'ocean_in': { name: '오션IN', pars: [4, 4, 5, 3, 4, 4, 5, 3, 4] },     // 36
+    },
+    combinations: [
+      { id: 'pub_sky72ocean_full', front: 'ocean_out', back: 'ocean_in', name: '오션코스 18홀' },
+    ],
+  },
+
+  // 스카이72 레이크코스 (18홀) - 플로리다 가든형
+  'pub_sky72lake': {
+    courses: {
+      'lake_out': { name: '레이크OUT', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },  // 36
+      'lake_in': { name: '레이크IN', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },    // 36
+    },
+    combinations: [
+      { id: 'pub_sky72lake_full', front: 'lake_out', back: 'lake_in', name: '레이크코스 18홀' },
+    ],
+  },
+
+  // 스카이72 클래식코스 (18홀) - 리조트형 클래식
+  'pub_sky72classic': {
+    courses: {
+      'classic_out': { name: '클래식OUT', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'classic_in': { name: '클래식IN', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+    },
+    combinations: [
+      { id: 'pub_sky72classic_full', front: 'classic_out', back: 'classic_in', name: '클래식코스 18홀' },
+    ],
+  },
+
+  // 베어즈베스트청라 (27홀) - 잭 니클라우스 설계
+  'pub_bearsbest': {
+    courses: {
+      'north': { name: '노스', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },   // 36
+      'south': { name: '사우스', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] }, // 36
+      'west': { name: '웨스트', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },  // 36
+    },
+    combinations: [
+      { id: 'pub_bearsbest_north_south', front: 'north', back: 'south', name: '노스+사우스' },
+      { id: 'pub_bearsbest_south_west', front: 'south', back: 'west', name: '사우스+웨스트' },
+      { id: 'pub_bearsbest_west_north', front: 'west', back: 'north', name: '웨스트+노스' },
+    ],
+  },
+
+  // ==================== 강원도 ====================
+
+  // 엘리시안강촌CC (27홀) - 밸리, 레이크, 힐 코스
+  'pub_elysiangangchon': {
+    courses: {
+      'valley': { name: '밸리', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'lake': { name: '레이크', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },  // 36
+      'hill': { name: '힐', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },      // 36
+    },
+    combinations: [
+      { id: 'pub_elysiangangchon_valley_lake', front: 'valley', back: 'lake', name: '밸리+레이크' },
+      { id: 'pub_elysiangangchon_lake_hill', front: 'lake', back: 'hill', name: '레이크+힐' },
+      { id: 'pub_elysiangangchon_hill_valley', front: 'hill', back: 'valley', name: '힐+밸리' },
+    ],
+  },
+
+  // 비발디파크 이스트CC (18홀)
+  'pub_vivaldieast': {
+    courses: {
+      'east_out': { name: '이스트OUT', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'east_in': { name: '이스트IN', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+    },
+    combinations: [
+      { id: 'pub_vivaldieast_full', front: 'east_out', back: 'east_in', name: '이스트코스 18홀' },
+    ],
+  },
+
+  // 비발디파크 웨스트CC (18홀)
+  'pub_vivaldiwest': {
+    courses: {
+      'west_out': { name: '웨스트OUT', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'west_in': { name: '웨스트IN', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+    },
+    combinations: [
+      { id: 'pub_vivaldiwest_full', front: 'west_out', back: 'west_in', name: '웨스트코스 18홀' },
+    ],
+  },
+
+  // 하이원CC (18홀) - PAR 73 (특수)
+  'pub_highone': {
+    courses: {
+      'high1_out': { name: '하이원OUT', pars: [4, 5, 3, 5, 4, 4, 3, 4, 5] },  // 37
+      'high1_in': { name: '하이원IN', pars: [4, 4, 3, 5, 4, 4, 3, 5, 4] },    // 36
+    },
+    combinations: [
+      { id: 'pub_highone_full', front: 'high1_out', back: 'high1_in', name: '하이원 18홀' },
+    ],
+  },
+
+  // 오크밸리CC (27홀) - 오크, 메이플, 체리, 파인 코스
+  'pub_oakvalley': {
+    courses: {
+      'oak': { name: '오크', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },     // 36
+      'maple': { name: '메이플', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] }, // 36
+      'cherry': { name: '체리', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },  // 36
+      'pine': { name: '파인', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },    // 36
+    },
+    combinations: [
+      { id: 'pub_oakvalley_oak_maple', front: 'oak', back: 'maple', name: '오크+메이플' },
+      { id: 'pub_oakvalley_maple_cherry', front: 'maple', back: 'cherry', name: '메이플+체리' },
+      { id: 'pub_oakvalley_cherry_pine', front: 'cherry', back: 'pine', name: '체리+파인' },
+      { id: 'pub_oakvalley_pine_oak', front: 'pine', back: 'oak', name: '파인+오크' },
+    ],
+  },
+
+  // 피닉스파크CC (27홀) - 피닉스, 마운틴, 밸리 코스
+  'pub_phoenixpark': {
+    courses: {
+      'phoenix': { name: '피닉스', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },   // 36
+      'mountain': { name: '마운틴', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },  // 36
+      'valley': { name: '밸리', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },      // 36
+    },
+    combinations: [
+      { id: 'pub_phoenixpark_phoenix_mountain', front: 'phoenix', back: 'mountain', name: '피닉스+마운틴' },
+      { id: 'pub_phoenixpark_mountain_valley', front: 'mountain', back: 'valley', name: '마운틴+밸리' },
+      { id: 'pub_phoenixpark_valley_phoenix', front: 'valley', back: 'phoenix', name: '밸리+피닉스' },
+    ],
+  },
+
+  // 알펜시아CC (18홀)
+  'pub_alpensia': {
+    courses: {
+      'alpen_out': { name: '알펜OUT', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'alpen_in': { name: '알펜IN', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+    },
+    combinations: [
+      { id: 'pub_alpensia_full', front: 'alpen_out', back: 'alpen_in', name: '알펜시아 18홀' },
+    ],
+  },
+
+  // 세이지우드CC (27홀) - 세이지, 우드, 힐 코스
+  'pub_sagewood': {
+    courses: {
+      'sage': { name: '세이지', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'wood': { name: '우드', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+      'hill': { name: '힐', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },      // 36
+    },
+    combinations: [
+      { id: 'pub_sagewood_sage_wood', front: 'sage', back: 'wood', name: '세이지+우드' },
+      { id: 'pub_sagewood_wood_hill', front: 'wood', back: 'hill', name: '우드+힐' },
+      { id: 'pub_sagewood_hill_sage', front: 'hill', back: 'sage', name: '힐+세이지' },
+    ],
+  },
+
+  // 오로라골프앤리조트 (27홀) - 오로라, 노스, 사우스 코스
+  'pub_aurora': {
+    courses: {
+      'aurora': { name: '오로라', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'north': { name: '노스', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },     // 36
+      'south': { name: '사우스', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },   // 36
+    },
+    combinations: [
+      { id: 'pub_aurora_aurora_north', front: 'aurora', back: 'north', name: '오로라+노스' },
+      { id: 'pub_aurora_north_south', front: 'north', back: 'south', name: '노스+사우스' },
+      { id: 'pub_aurora_south_aurora', front: 'south', back: 'aurora', name: '사우스+오로라' },
+    ],
+  },
+
+  // 센츄리21CC (36홀) - 로얄, 챔피언 코스
+  'pub_century21': {
+    courses: {
+      'royal_out': { name: '로얄OUT', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },      // 36
+      'royal_in': { name: '로얄IN', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },        // 36
+      'champion_out': { name: '챔피언OUT', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] }, // 36
+      'champion_in': { name: '챔피언IN', pars: [4, 4, 3, 5, 4, 4, 3, 5, 4] },   // 36
+    },
+    combinations: [
+      { id: 'pub_century21_royal', front: 'royal_out', back: 'royal_in', name: '로얄코스 18홀' },
+      { id: 'pub_century21_champion', front: 'champion_out', back: 'champion_in', name: '챔피언코스 18홀' },
+    ],
+  },
+
+  // 라비에벨CC (36홀) - 라비에, 벨 코스
+  'pub_laviebelle': {
+    courses: {
+      'lavie_out': { name: '라비에OUT', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'lavie_in': { name: '라비에IN', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+      'belle_out': { name: '벨OUT', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },      // 36
+      'belle_in': { name: '벨IN', pars: [4, 4, 3, 5, 4, 4, 3, 5, 4] },        // 36
+    },
+    combinations: [
+      { id: 'pub_laviebelle_lavie', front: 'lavie_out', back: 'lavie_in', name: '라비에코스 18홀' },
+      { id: 'pub_laviebelle_belle', front: 'belle_out', back: 'belle_in', name: '벨코스 18홀' },
+    ],
+  },
+
+  // ==================== 충청도 ====================
+
+  // 골프존카운티진천 (27홀) - 밸리, 힐, 레이크 코스
+  'pub_golfzonjincheon': {
+    courses: {
+      'valley': { name: '밸리', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'hill': { name: '힐', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },      // 36
+      'lake': { name: '레이크', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },  // 36
+    },
+    combinations: [
+      { id: 'pub_golfzonjincheon_valley_hill', front: 'valley', back: 'hill', name: '밸리+힐' },
+      { id: 'pub_golfzonjincheon_hill_lake', front: 'hill', back: 'lake', name: '힐+레이크' },
+      { id: 'pub_golfzonjincheon_lake_valley', front: 'lake', back: 'valley', name: '레이크+밸리' },
+    ],
+  },
+
+  // 힐데스하임CC (27홀) - 힐, 데스, 하임 코스
+  'pub_hildesheim': {
+    courses: {
+      'hil': { name: '힐', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },    // 36
+      'des': { name: '데스', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },  // 36
+      'heim': { name: '하임', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] }, // 36
+    },
+    combinations: [
+      { id: 'pub_hildesheim_hil_des', front: 'hil', back: 'des', name: '힐+데스' },
+      { id: 'pub_hildesheim_des_heim', front: 'des', back: 'heim', name: '데스+하임' },
+      { id: 'pub_hildesheim_heim_hil', front: 'heim', back: 'hil', name: '하임+힐' },
+    ],
+  },
+
+  // 킹즈락CC (27홀) - 킹스, 락, 밸리 코스
+  'pub_kingsrock': {
+    courses: {
+      'kings': { name: '킹스', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'rock': { name: '락', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },     // 36
+      'valley': { name: '밸리', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] }, // 36
+    },
+    combinations: [
+      { id: 'pub_kingsrock_kings_rock', front: 'kings', back: 'rock', name: '킹스+락' },
+      { id: 'pub_kingsrock_rock_valley', front: 'rock', back: 'valley', name: '락+밸리' },
+      { id: 'pub_kingsrock_valley_kings', front: 'valley', back: 'kings', name: '밸리+킹스' },
+    ],
+  },
+
+  // 레인보우힐스CC (27홀) - 레인, 보우, 힐스 코스
+  'pub_rainbow': {
+    courses: {
+      'rain': { name: '레인', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },   // 36
+      'bow': { name: '보우', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+      'hills': { name: '힐스', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },  // 36
+    },
+    combinations: [
+      { id: 'pub_rainbow_rain_bow', front: 'rain', back: 'bow', name: '레인+보우' },
+      { id: 'pub_rainbow_bow_hills', front: 'bow', back: 'hills', name: '보우+힐스' },
+      { id: 'pub_rainbow_hills_rain', front: 'hills', back: 'rain', name: '힐스+레인' },
+    ],
+  },
+
+  // 대영베이스CC (27홀) - 베이스, 힐, 밸리 코스
+  'pub_daeyoungbase': {
+    courses: {
+      'base': { name: '베이스', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'hill': { name: '힐', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },      // 36
+      'valley': { name: '밸리', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },  // 36
+    },
+    combinations: [
+      { id: 'pub_daeyoungbase_base_hill', front: 'base', back: 'hill', name: '베이스+힐' },
+      { id: 'pub_daeyoungbase_hill_valley', front: 'hill', back: 'valley', name: '힐+밸리' },
+      { id: 'pub_daeyoungbase_valley_base', front: 'valley', back: 'base', name: '밸리+베이스' },
+    ],
+  },
+
+  // 레이캐슬골프앤리조트 (27홀) - 레이, 캐슬, 밸리 코스
+  'pub_raycastle': {
+    courses: {
+      'ray': { name: '레이', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },     // 36
+      'castle': { name: '캐슬', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },  // 36
+      'valley': { name: '밸리', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },  // 36
+    },
+    combinations: [
+      { id: 'pub_raycastle_ray_castle', front: 'ray', back: 'castle', name: '레이+캐슬' },
+      { id: 'pub_raycastle_castle_valley', front: 'castle', back: 'valley', name: '캐슬+밸리' },
+      { id: 'pub_raycastle_valley_ray', front: 'valley', back: 'ray', name: '밸리+레이' },
+    ],
+  },
+
+  // 대천CC (27홀) - 오션, 베이, 힐 코스
+  'pub_daecheon': {
+    courses: {
+      'ocean': { name: '오션', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'bay': { name: '베이', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+      'hill': { name: '힐', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },     // 36
+    },
+    combinations: [
+      { id: 'pub_daecheon_ocean_bay', front: 'ocean', back: 'bay', name: '오션+베이' },
+      { id: 'pub_daecheon_bay_hill', front: 'bay', back: 'hill', name: '베이+힐' },
+      { id: 'pub_daecheon_hill_ocean', front: 'hill', back: 'ocean', name: '힐+오션' },
+    ],
+  },
+
+  // ==================== 전라도 ====================
+
+  // 골프존카운티드래곤 (18홀)
+  'pub_golfzondragon': {
+    courses: {
+      'dragon_out': { name: '드래곤OUT', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'dragon_in': { name: '드래곤IN', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+    },
+    combinations: [
+      { id: 'pub_golfzondragon_full', front: 'dragon_out', back: 'dragon_in', name: '드래곤 18홀' },
+    ],
+  },
+
+  // 클럽디금강CC (27홀) - 금강, 리버, 힐 코스
+  'pub_clubdigold': {
+    courses: {
+      'geumgang': { name: '금강', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'river': { name: '리버', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },     // 36
+      'hill': { name: '힐', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },        // 36
+    },
+    combinations: [
+      { id: 'pub_clubdigold_geumgang_river', front: 'geumgang', back: 'river', name: '금강+리버' },
+      { id: 'pub_clubdigold_river_hill', front: 'river', back: 'hill', name: '리버+힐' },
+      { id: 'pub_clubdigold_hill_geumgang', front: 'hill', back: 'geumgang', name: '힐+금강' },
+    ],
+  },
+
+  // 덕유산리조트CC (27홀) - 덕유, 산, 밸리 코스
+  'pub_deokyu': {
+    courses: {
+      'deokyu': { name: '덕유', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },   // 36
+      'san': { name: '산', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },        // 36
+      'valley': { name: '밸리', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },   // 36
+    },
+    combinations: [
+      { id: 'pub_deokyu_deokyu_san', front: 'deokyu', back: 'san', name: '덕유+산' },
+      { id: 'pub_deokyu_san_valley', front: 'san', back: 'valley', name: '산+밸리' },
+      { id: 'pub_deokyu_valley_deokyu', front: 'valley', back: 'deokyu', name: '밸리+덕유' },
+    ],
+  },
+
+  // ==================== 경상도 ====================
+
+  // 통도환타지아CC (27홀) - 통도, 환타, 지아 코스
+  'pub_tongdofantasia': {
+    courses: {
+      'tongdo': { name: '통도', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },   // 36
+      'fanta': { name: '환타', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+      'sia': { name: '지아', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },      // 36
+    },
+    combinations: [
+      { id: 'pub_tongdofantasia_tongdo_fanta', front: 'tongdo', back: 'fanta', name: '통도+환타' },
+      { id: 'pub_tongdofantasia_fanta_sia', front: 'fanta', back: 'sia', name: '환타+지아' },
+      { id: 'pub_tongdofantasia_sia_tongdo', front: 'sia', back: 'tongdo', name: '지아+통도' },
+    ],
+  },
+
+  // 가야CC (27홀) - 가야, 힐, 밸리 코스
+  'pub_gaya': {
+    courses: {
+      'gaya': { name: '가야', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },    // 36
+      'hill': { name: '힐', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },      // 36
+      'valley': { name: '밸리', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },  // 36
+    },
+    combinations: [
+      { id: 'pub_gaya_gaya_hill', front: 'gaya', back: 'hill', name: '가야+힐' },
+      { id: 'pub_gaya_hill_valley', front: 'hill', back: 'valley', name: '힐+밸리' },
+      { id: 'pub_gaya_valley_gaya', front: 'valley', back: 'gaya', name: '밸리+가야' },
+    ],
+  },
+
+  // 골프존카운티영덕 (27홀) - 오션, 씨사이드, 힐 코스
+  'pub_golfzonyeongdeok': {
+    courses: {
+      'ocean': { name: '오션', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },      // 36
+      'seaside': { name: '씨사이드', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] }, // 36
+      'hill': { name: '힐', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },         // 36
+    },
+    combinations: [
+      { id: 'pub_golfzonyeongdeok_ocean_seaside', front: 'ocean', back: 'seaside', name: '오션+씨사이드' },
+      { id: 'pub_golfzonyeongdeok_seaside_hill', front: 'seaside', back: 'hill', name: '씨사이드+힐' },
+      { id: 'pub_golfzonyeongdeok_hill_ocean', front: 'hill', back: 'ocean', name: '힐+오션' },
+    ],
+  },
+
+  // 골프존카운티안동 (27홀) - 안동, 하회, 도산 코스
+  'pub_golfzonandong': {
+    courses: {
+      'andong': { name: '안동', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'hahoe': { name: '하회', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },   // 36
+      'dosan': { name: '도산', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },   // 36
+    },
+    combinations: [
+      { id: 'pub_golfzonandong_andong_hahoe', front: 'andong', back: 'hahoe', name: '안동+하회' },
+      { id: 'pub_golfzonandong_hahoe_dosan', front: 'hahoe', back: 'dosan', name: '하회+도산' },
+      { id: 'pub_golfzonandong_dosan_andong', front: 'dosan', back: 'andong', name: '도산+안동' },
+    ],
+  },
+
+  // 블루원디아너스CC (27홀) - 블루, 원, 디아 코스
+  'pub_blueonedianese': {
+    courses: {
+      'blue': { name: '블루', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'one': { name: '원', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },     // 36
+      'dia': { name: '디아', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },   // 36
+    },
+    combinations: [
+      { id: 'pub_blueonedianese_blue_one', front: 'blue', back: 'one', name: '블루+원' },
+      { id: 'pub_blueonedianese_one_dia', front: 'one', back: 'dia', name: '원+디아' },
+      { id: 'pub_blueonedianese_dia_blue', front: 'dia', back: 'blue', name: '디아+블루' },
+    ],
+  },
+
+  // ==================== 제주도 ====================
+
+  // 핀크스GC (18홀) - 테디밸리 설계
+  'pub_pinx': {
+    courses: {
+      'pinx_out': { name: '핀크스OUT', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'pinx_in': { name: '핀크스IN', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+    },
+    combinations: [
+      { id: 'pub_pinx_full', front: 'pinx_out', back: 'pinx_in', name: '핀크스 18홀' },
+    ],
+  },
+
+  // 나인브릿지GC (18홀)
+  'pub_ninebridge': {
+    courses: {
+      'nine_out': { name: '나인OUT', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'nine_in': { name: '나인IN', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+    },
+    combinations: [
+      { id: 'pub_ninebridge_full', front: 'nine_out', back: 'nine_in', name: '나인브릿지 18홀' },
+    ],
+  },
+
+  // 블랙스톤제주CC (18홀)
+  'pub_blackstonejeju': {
+    courses: {
+      'black_out': { name: '블랙OUT', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'black_in': { name: '블랙IN', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+    },
+    combinations: [
+      { id: 'pub_blackstonejeju_full', front: 'black_out', back: 'black_in', name: '블랙스톤 18홀' },
+    ],
+  },
+
+  // 제주국제CC (27홀) - 국제, 한라, 해변 코스
+  'pub_jejuinternational': {
+    courses: {
+      'international': { name: '국제', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'halla': { name: '한라', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },          // 36
+      'beach': { name: '해변', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },          // 36
+    },
+    combinations: [
+      { id: 'pub_jejuinternational_international_halla', front: 'international', back: 'halla', name: '국제+한라' },
+      { id: 'pub_jejuinternational_halla_beach', front: 'halla', back: 'beach', name: '한라+해변' },
+      { id: 'pub_jejuinternational_beach_international', front: 'beach', back: 'international', name: '해변+국제' },
+    ],
+  },
+
+  // 오라CC (27홀) - 오라, 한라, 영주 코스
+  'pub_ora': {
+    courses: {
+      'ora': { name: '오라', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },     // 36
+      'halla': { name: '한라', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },   // 36
+      'youngju': { name: '영주', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] }, // 36
+    },
+    combinations: [
+      { id: 'pub_ora_ora_halla', front: 'ora', back: 'halla', name: '오라+한라' },
+      { id: 'pub_ora_halla_youngju', front: 'halla', back: 'youngju', name: '한라+영주' },
+      { id: 'pub_ora_youngju_ora', front: 'youngju', back: 'ora', name: '영주+오라' },
+    ],
+  },
+
+  // 스카이힐제주CC (27홀) - 스카이, 힐, 밸리 코스
+  'pub_skyhilljeju': {
+    courses: {
+      'sky': { name: '스카이', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },   // 36
+      'hill': { name: '힐', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },      // 36
+      'valley': { name: '밸리', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },  // 36
+    },
+    combinations: [
+      { id: 'pub_skyhilljeju_sky_hill', front: 'sky', back: 'hill', name: '스카이+힐' },
+      { id: 'pub_skyhilljeju_hill_valley', front: 'hill', back: 'valley', name: '힐+밸리' },
+      { id: 'pub_skyhilljeju_valley_sky', front: 'valley', back: 'sky', name: '밸리+스카이' },
+    ],
+  },
+
+  // 아덴힐CC (27홀) - 아덴, 힐, 뷰 코스
+  'pub_adenhill': {
+    courses: {
+      'aden': { name: '아덴', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'hill': { name: '힐', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+      'view': { name: '뷰', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] },    // 36
+    },
+    combinations: [
+      { id: 'pub_adenhill_aden_hill', front: 'aden', back: 'hill', name: '아덴+힐' },
+      { id: 'pub_adenhill_hill_view', front: 'hill', back: 'view', name: '힐+뷰' },
+      { id: 'pub_adenhill_view_aden', front: 'view', back: 'aden', name: '뷰+아덴' },
+    ],
+  },
+
+  // 롯데스카이힐제주CC (36홀) - 노스, 사우스 코스
+  'pub_lotteskyhilljeju': {
+    courses: {
+      'north_out': { name: '노스OUT', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },  // 36
+      'north_in': { name: '노스IN', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },    // 36
+      'south_out': { name: '사우스OUT', pars: [5, 4, 3, 4, 4, 4, 3, 4, 5] }, // 36
+      'south_in': { name: '사우스IN', pars: [4, 4, 3, 5, 4, 4, 3, 5, 4] },   // 36
+    },
+    combinations: [
+      { id: 'pub_lotteskyhilljeju_north', front: 'north_out', back: 'north_in', name: '노스코스 18홀' },
+      { id: 'pub_lotteskyhilljeju_south', front: 'south_out', back: 'south_in', name: '사우스코스 18홀' },
+    ],
+  },
 };

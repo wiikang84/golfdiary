@@ -65,35 +65,7 @@ export default function StatsScreen() {
     };
   };
 
-  // 필드 비용 계산
-  const getFieldCosts = () => {
-    const now = new Date();
-    const thisMonth = fieldRounds.filter(r => {
-      const dateParts = r.date?.replace(/\./g, '').trim().split(' ').filter(p => p);
-      if (dateParts?.length >= 2) {
-        const year = parseInt(dateParts[0]);
-        const month = parseInt(dateParts[1]);
-        return year === now.getFullYear() && month === now.getMonth() + 1;
-      }
-      return false;
-    });
-
-    const thisYear = fieldRounds.filter(r => {
-      const dateParts = r.date?.replace(/\./g, '').trim().split(' ').filter(p => p);
-      if (dateParts?.length >= 1) {
-        return parseInt(dateParts[0]) === now.getFullYear();
-      }
-      return false;
-    });
-
-    return {
-      monthTotal: thisMonth.reduce((sum, r) => sum + (parseInt(r.cost) || 0), 0),
-      yearTotal: thisYear.reduce((sum, r) => sum + (parseInt(r.cost) || 0), 0),
-    };
-  };
-
   const tabStats = getTabStats();
-  const fieldCosts = getFieldCosts();
 
   // 캘린더 관련 함수들
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
@@ -105,6 +77,53 @@ export default function StatsScreen() {
 
   const nextMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  // 해당 날짜에 활동이 있는지 확인하는 함수
+  const getActivityForDay = (year, month, day) => {
+    const activities = {
+      hasPractice: false,
+      hasScreen: false,
+      hasField: false,
+    };
+
+    // 연습 기록 확인
+    const dayData = monthlyData[day];
+    if (dayData && dayData.totalTime > 0) {
+      activities.hasPractice = true;
+    }
+
+    // 스크린 라운드 확인
+    screenRounds.forEach(round => {
+      if (round.date) {
+        const dateParts = round.date.replace(/\./g, '').trim().split(' ').filter(p => p);
+        if (dateParts.length >= 3) {
+          const rYear = parseInt(dateParts[0]);
+          const rMonth = parseInt(dateParts[1]);
+          const rDay = parseInt(dateParts[2]);
+          if (rYear === year && rMonth === month + 1 && rDay === day) {
+            activities.hasScreen = true;
+          }
+        }
+      }
+    });
+
+    // 필드 라운드 확인
+    fieldRounds.forEach(round => {
+      if (round.date) {
+        const dateParts = round.date.replace(/\./g, '').trim().split(' ').filter(p => p);
+        if (dateParts.length >= 3) {
+          const rYear = parseInt(dateParts[0]);
+          const rMonth = parseInt(dateParts[1]);
+          const rDay = parseInt(dateParts[2]);
+          if (rYear === year && rMonth === month + 1 && rDay === day) {
+            activities.hasField = true;
+          }
+        }
+      }
+    });
+
+    return activities;
   };
 
   const renderCalendar = () => {
@@ -122,24 +141,28 @@ export default function StatsScreen() {
 
     // 날짜 추가
     for (let day = 1; day <= daysInMonth; day++) {
-      const dayData = monthlyData[day];
-      const hasData = dayData && dayData.totalTime > 0;
-      const intensity = hasData ? Math.min(dayData.totalTime / 120, 1) : 0; // 최대 2시간 기준
+      const activities = getActivityForDay(year, month, day);
+      const hasAnyActivity = activities.hasPractice || activities.hasScreen || activities.hasField;
 
       days.push(
         <View key={day} style={styles.calendarDay}>
           <View style={[
             styles.calendarDayInner,
-            hasData && { backgroundColor: `rgba(27, 94, 32, ${0.2 + intensity * 0.6})` }
+            hasAnyActivity && styles.calendarDayActive
           ]}>
             <Text style={[
               styles.calendarDayText,
-              hasData && styles.calendarDayTextActive
+              hasAnyActivity && styles.calendarDayTextActive
             ]}>
               {day}
             </Text>
-            {hasData && (
-              <Text style={styles.calendarDayTime}>{dayData.totalTime}분</Text>
+            {/* 활동 점 표시 */}
+            {hasAnyActivity && (
+              <View style={styles.activityDots}>
+                {activities.hasField && <View style={[styles.activityDot, styles.dotField]} />}
+                {activities.hasScreen && <View style={[styles.activityDot, styles.dotScreen]} />}
+                {activities.hasPractice && <View style={[styles.activityDot, styles.dotPractice]} />}
+              </View>
             )}
           </View>
         </View>
@@ -228,7 +251,18 @@ export default function StatsScreen() {
             {renderCalendar()}
           </View>
           <View style={styles.calendarLegend}>
-            <Text style={styles.legendText}>연습 시간에 따라 색상 진하기가 달라집니다</Text>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#22C55E' }]} />
+              <Text style={styles.legendText}>필드</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#3B82F6' }]} />
+              <Text style={styles.legendText}>스크린</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#EAB308' }]} />
+              <Text style={styles.legendText}>연습</Text>
+            </View>
           </View>
         </View>
 
@@ -287,30 +321,6 @@ export default function StatsScreen() {
               <View style={styles.practiceItem}>
                 <Text style={styles.practiceValue}>{stats.totalBalls || 0}</Text>
                 <Text style={styles.practiceLabel}>총 연습 공</Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {activeTab === 'field' && (
-          <View style={styles.costCard}>
-            <View style={styles.costHeader}>
-              <Text style={styles.costIcon}>💰</Text>
-              <Text style={styles.costTitle}>비용 통계</Text>
-            </View>
-            <View style={styles.costBody}>
-              <View style={styles.costItem}>
-                <Text style={styles.costLabel}>이번 달</Text>
-                <Text style={styles.costValue}>
-                  {fieldCosts.monthTotal.toLocaleString()}원
-                </Text>
-              </View>
-              <View style={styles.costDivider} />
-              <View style={styles.costItem}>
-                <Text style={styles.costLabel}>올해 총</Text>
-                <Text style={styles.costValue}>
-                  {fieldCosts.yearTotal.toLocaleString()}원
-                </Text>
               </View>
             </View>
           </View>
@@ -457,11 +467,47 @@ const styles = StyleSheet.create({
   },
   calendarLegend: {
     marginTop: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  legendItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   legendText: {
     fontSize: 12,
     color: COLORS.textMuted,
+  },
+  // 활동 점 스타일
+  calendarDayActive: {
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+  },
+  activityDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 2,
+    gap: 2,
+  },
+  activityDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  dotField: {
+    backgroundColor: '#22C55E',
+  },
+  dotScreen: {
+    backgroundColor: '#3B82F6',
+  },
+  dotPractice: {
+    backgroundColor: '#EAB308',
   },
   // 통계 카드
   statsCard: {

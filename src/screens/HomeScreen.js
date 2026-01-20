@@ -35,10 +35,11 @@ export default function HomeScreen({ navigation }) {
     setRecentRounds(allRounds);
   };
 
-  // 화면 포커스될 때마다 데이터 새로고침
+  // 화면 포커스될 때마다 데이터 새로고침 및 명언 변경
   useFocusEffect(
     useCallback(() => {
       loadData();
+      setQuote(getRandomQuote()); // 화면 전환 시 명언 변경
     }, [])
   );
 

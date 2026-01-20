@@ -10,7 +10,7 @@ import {
   TextInput,
   Share,
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { COLORS, SHADOWS } from '../theme/premium';
@@ -33,6 +33,8 @@ export default function SettingsScreen() {
   const [tempNickname, setTempNickname] = useState('');
   const [journey, setJourney] = useState(null);
   const [guideModalVisible, setGuideModalVisible] = useState(false);
+  const [restoreModalVisible, setRestoreModalVisible] = useState(false);
+  const [restoreText, setRestoreText] = useState('');
 
   useEffect(() => {
     loadData();
@@ -90,65 +92,100 @@ export default function SettingsScreen() {
     Alert.alert('저장 완료', '닉네임이 변경되었습니다.');
   };
 
-  // 데이터 백업 (JSON 파일 공유)
+  // 데이터 백업 (TXT 파일 공유 - 카카오톡에서 열기 쉽도록)
   const handleBackup = async () => {
     try {
+      // 1. 데이터 내보내기
       const data = await exportAllData();
-      const fileName = `golf-diary-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      const filePath = `${FileSystem.cacheDirectory}${fileName}`;
+      const jsonString = JSON.stringify(data, null, 2);
 
-      await FileSystem.writeAsStringAsync(filePath, JSON.stringify(data, null, 2));
+      // 디버깅: 데이터 개수 확인
+      const practiceCount = data.data?.practices?.length || 0;
+      const screenCount = data.data?.screenRounds?.length || 0;
+      const fieldCount = data.data?.fieldRounds?.length || 0;
 
-      if (await Sharing.isAvailableAsync()) {
+      // 2. 파일 저장 (매번 새 파일명 - 시간 포함)
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+      const fileName = `golf-diary-backup-${timestamp}.txt`;
+      const filePath = `${FileSystem.documentDirectory}${fileName}`;
+
+      // 기존 파일 삭제 (있으면)
+      const existingFile = await FileSystem.getInfoAsync(filePath);
+      if (existingFile.exists) {
+        await FileSystem.deleteAsync(filePath);
+      }
+
+      // 새 파일 작성
+      await FileSystem.writeAsStringAsync(filePath, jsonString);
+
+      // 3. 파일 존재 확인
+      const fileInfo = await FileSystem.getInfoAsync(filePath);
+      if (!fileInfo.exists) {
+        Alert.alert('오류', '백업 파일 생성에 실패했습니다.');
+        return;
+      }
+
+      // 4. 공유 가능 여부 확인 및 공유
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
         await Sharing.shareAsync(filePath, {
-          mimeType: 'application/json',
-          dialogTitle: 'Golf Diary 백업 파일',
+          mimeType: 'text/plain',
+          dialogTitle: `Golf Diary 백업 (연습${practiceCount}, 스크린${screenCount}, 필드${fieldCount})`,
+          UTI: 'public.plain-text',
         });
       } else {
-        Alert.alert('오류', '공유 기능을 사용할 수 없습니다.');
+        // 공유 불가시 React Native Share로 텍스트 공유
+        await Share.share({
+          message: `Golf Diary 백업 데이터\n\n${jsonString}`,
+          title: 'Golf Diary 백업',
+        });
       }
     } catch (error) {
       console.error('백업 실패:', error);
-      Alert.alert('오류', '백업 중 오류가 발생했습니다.');
+      Alert.alert(
+        '백업 오류',
+        `백업 중 오류가 발생했습니다.\n\n상세: ${error.message || '알 수 없는 오류'}`,
+        [{ text: '확인' }]
+      );
     }
   };
 
-  // 데이터 복원
-  const handleRestore = async () => {
-    Alert.alert(
-      '데이터 복원',
-      '백업 파일에서 데이터를 복원하시겠습니까?\n기존 데이터가 덮어씌워집니다.',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '파일 선택',
-          onPress: async () => {
-            try {
-              const result = await DocumentPicker.getDocumentAsync({
-                type: 'application/json',
-                copyToCacheDirectory: true,
-              });
+  // 데이터 복원 (복사-붙여넣기 방식)
+  const handleRestore = () => {
+    setRestoreText('');
+    setRestoreModalVisible(true);
+  };
 
-              if (result.canceled) return;
+  // 복원 실행
+  const executeRestore = async () => {
+    if (!restoreText.trim()) {
+      Alert.alert('알림', '백업 데이터를 붙여넣기 해주세요.');
+      return;
+    }
 
-              const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri);
-              const backupData = JSON.parse(fileContent);
+    try {
+      const backupData = JSON.parse(restoreText.trim());
 
-              const importResult = await importAllData(backupData);
-              if (importResult.success) {
-                Alert.alert('완료', '데이터가 복원되었습니다.\n앱을 다시 시작해주세요.');
-                loadData();
-              } else {
-                Alert.alert('오류', importResult.error || '복원에 실패했습니다.');
-              }
-            } catch (error) {
-              console.error('복원 실패:', error);
-              Alert.alert('오류', '파일을 읽는 중 오류가 발생했습니다.');
-            }
-          },
-        },
-      ]
-    );
+      // 데이터 유효성 검사
+      if (!backupData.data && !backupData.practices) {
+        Alert.alert('오류', '올바른 백업 데이터가 아닙니다.');
+        return;
+      }
+
+      const importResult = await importAllData(backupData);
+      if (importResult.success) {
+        setRestoreModalVisible(false);
+        setRestoreText('');
+        Alert.alert('완료', '데이터가 복원되었습니다.\n앱을 다시 시작해주세요.');
+        loadData();
+      } else {
+        Alert.alert('오류', importResult.error || '복원에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('복원 실패:', error);
+      Alert.alert('오류', '데이터 형식이 올바르지 않습니다.\n백업 내용을 정확히 복사했는지 확인해주세요.');
+    }
   };
 
   const handleComingSoon = () => {
@@ -341,15 +378,15 @@ export default function SettingsScreen() {
                 </View>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>2</Text>
-                  <Text style={styles.guideStepText}>공유 화면에서 "카카오톡"을 선택합니다</Text>
+                  <Text style={styles.guideStepText}>공유 화면 하단에서 "카카오톡" 버튼을 누릅니다</Text>
                 </View>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>3</Text>
-                  <Text style={styles.guideStepText}>"나에게 보내기" 또는 "나와의 채팅"을 선택합니다</Text>
+                  <Text style={styles.guideStepText}>"나와의 채팅"을 선택하여 전송합니다</Text>
                 </View>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>4</Text>
-                  <Text style={styles.guideStepText}>백업 파일이 카카오톡으로 전송됩니다!</Text>
+                  <Text style={styles.guideStepText}>백업 파일이 카카오톡으로 전송됩니다!{'\n'}(카카오톡을 먼저 누른후 나와의채팅을 눌러주세요)</Text>
                 </View>
               </View>
 
@@ -362,7 +399,7 @@ export default function SettingsScreen() {
                 </View>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>2</Text>
-                  <Text style={styles.guideStepText}>카카오톡에서 백업 파일을 찾아 다운로드합니다</Text>
+                  <Text style={styles.guideStepText}>카카오톡에서 백업 파일을 열어 내용을 전체 복사합니다</Text>
                 </View>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>3</Text>
@@ -370,15 +407,15 @@ export default function SettingsScreen() {
                 </View>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>4</Text>
-                  <Text style={styles.guideStepText}>다운로드한 백업 파일을 선택하면 완료!</Text>
+                  <Text style={styles.guideStepText}>복사한 내용을 붙여넣기 → "복원하기" 버튼!</Text>
                 </View>
               </View>
 
               {/* 팁 */}
               <View style={styles.guideTipBox}>
                 <Text style={styles.guideTipTitle}>💡 꿀팁</Text>
+                <Text style={styles.guideTipText}>• 카톡에서 파일 열기 → 전체선택 → 복사</Text>
                 <Text style={styles.guideTipText}>• 이메일로 자신에게 보내도 됩니다</Text>
-                <Text style={styles.guideTipText}>• Google 드라이브에 저장해도 됩니다</Text>
                 <Text style={styles.guideTipText}>• 백업 파일은 작아서 전송이 빠릅니다</Text>
                 <Text style={styles.guideTipText}>• 정기적으로 백업하면 안전합니다!</Text>
               </View>
@@ -392,6 +429,58 @@ export default function SettingsScreen() {
             >
               <Text style={styles.guideCloseButtonText}>확인</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 데이터 복원 모달 (붙여넣기 방식) */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={restoreModalVisible}
+        onRequestClose={() => setRestoreModalVisible(false)}
+      >
+        <View style={styles.restoreModalOverlay}>
+          <View style={styles.restoreModalContent}>
+            <View style={styles.restoreHeader}>
+              <Text style={styles.restoreTitle}>📥 데이터 복원</Text>
+              <TouchableOpacity onPress={() => setRestoreModalVisible(false)}>
+                <Text style={styles.restoreCloseBtn}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.restoreDesc}>
+              카카오톡에서 백업 파일 내용을 복사한 후{'\n'}
+              아래에 붙여넣기 해주세요.
+            </Text>
+
+            <TextInput
+              style={styles.restoreInput}
+              placeholder={'{"version": "1.0", ...}\n\n백업 데이터를 여기에 붙여넣기'}
+              placeholderTextColor={COLORS.textMuted}
+              value={restoreText}
+              onChangeText={setRestoreText}
+              multiline={true}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.restoreButtons}>
+              <TouchableOpacity
+                style={[styles.restoreButton, styles.restoreButtonCancel]}
+                onPress={() => {
+                  setRestoreModalVisible(false);
+                  setRestoreText('');
+                }}
+              >
+                <Text style={styles.restoreButtonTextCancel}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.restoreButton, styles.restoreButtonConfirm]}
+                onPress={executeRestore}
+              >
+                <Text style={styles.restoreButtonTextConfirm}>복원하기</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -779,6 +868,82 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   guideCloseButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textWhite,
+  },
+  // 복원 모달 스타일
+  restoreModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  restoreModalContent: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    maxHeight: '80%',
+  },
+  restoreHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  restoreTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  restoreCloseBtn: {
+    fontSize: 20,
+    color: COLORS.textMuted,
+    padding: 4,
+  },
+  restoreDesc: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  restoreInput: {
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    minHeight: 200,
+    maxHeight: 300,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    fontFamily: 'monospace',
+  },
+  restoreButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  restoreButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  restoreButtonCancel: {
+    backgroundColor: COLORS.backgroundGray,
+  },
+  restoreButtonConfirm: {
+    backgroundColor: COLORS.primary,
+  },
+  restoreButtonTextCancel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  restoreButtonTextConfirm: {
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.textWhite,

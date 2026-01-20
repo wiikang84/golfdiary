@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const isWeb = Platform.OS === 'web';
 import { COLORS, SHADOWS } from '../theme/premium';
@@ -35,6 +36,8 @@ export default function RoundScreen() {
   const [isEditMode, setIsEditMode] = useState(false); // 수정 모드 여부
   const [courseSelectorVisible, setCourseSelectorVisible] = useState(false); // 코스 선택 모달
   const [selectedCourse, setSelectedCourse] = useState(null); // 선택된 코스
+  const [selectedDate, setSelectedDate] = useState(new Date()); // 선택된 날짜
+  const [showDatePicker, setShowDatePicker] = useState(false); // 날짜 선택기 표시 여부
 
   // 앱 시작시 저장된 데이터 불러오기
   useEffect(() => {
@@ -150,6 +153,16 @@ export default function RoundScreen() {
       holeScores: round.holeScores || null,
       holePars: round.holePars || null,
     });
+    // 기존 날짜 파싱
+    if (round.date) {
+      const dateParts = round.date.replace(/\./g, '').trim().split(' ').filter(p => p);
+      if (dateParts.length >= 3) {
+        const year = parseInt(dateParts[0]);
+        const month = parseInt(dateParts[1]) - 1;
+        const day = parseInt(dateParts[2]);
+        setSelectedDate(new Date(year, month, day));
+      }
+    }
     setModalVisible(true);
   };
 
@@ -158,6 +171,7 @@ export default function RoundScreen() {
     setEditingRound(null);
     setIsEditMode(false);
     setSelectedCourse(null);
+    setSelectedDate(new Date()); // 오늘 날짜로 초기화
     setRoundData({
       courseName: '',
       score: '',
@@ -184,6 +198,21 @@ export default function RoundScreen() {
         courseName: course.name,
         holePars: course.holes,
       }));
+
+      // 기본 PAR 사용 시 안내 메시지 (실제 코스 데이터가 없는 경우)
+      const defaultPars = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
+      const isDefaultPar = course.holes &&
+        JSON.stringify(course.holes) === JSON.stringify(defaultPars);
+
+      if (isDefaultPar && !isWeb) {
+        setTimeout(() => {
+          Alert.alert(
+            '홀 PAR 안내',
+            '이 골프장은 기본 PAR 정보를 사용합니다.\n\n스코어 입력 시 각 홀의 PAR을 직접 수정할 수 있습니다.\n\n(홀 번호 위의 PAR 숫자를 터치하세요)',
+            [{ text: '확인' }]
+          );
+        }, 300);
+      }
     } else {
       // 직접 입력 모드
       setSelectedCourse(null);
@@ -211,12 +240,23 @@ export default function RoundScreen() {
     });
   };
 
+  // 날짜를 포맷팅하는 함수
+  const formatDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}. ${month}. ${day}.`;
+  };
+
   const saveRound = async () => {
+    const formattedDate = formatDate(selectedDate);
+
     if (isEditMode && editingRound) {
       // 수정 모드: 기존 라운드 업데이트
       const updatedRound = {
         ...editingRound,
         ...roundData,
+        date: formattedDate,
       };
 
       if (editingRound.type === 'screen') {
@@ -237,7 +277,7 @@ export default function RoundScreen() {
       const newRound = {
         ...roundData,
         id: Date.now(),
-        date: new Date().toLocaleDateString('ko-KR'),
+        date: formattedDate,
         type: activeTab,
       };
 
@@ -431,14 +471,6 @@ export default function RoundScreen() {
                         <Text style={styles.infoValue}>{round.companions}</Text>
                       </View>
                     )}
-                    {round.cost && (
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>비용</Text>
-                        <Text style={[styles.infoValue, { color: COLORS.gold }]}>
-                          {Number(round.cost).toLocaleString()}원
-                        </Text>
-                      </View>
-                    )}
                   </>
                 )}
                 {round.memo && (
@@ -508,6 +540,32 @@ export default function RoundScreen() {
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* 날짜 선택 */}
+              <Text style={styles.inputLabel}>날짜</Text>
+              <TouchableOpacity
+                style={styles.dateSelector}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={styles.dateSelectorIcon}>📅</Text>
+                <Text style={styles.dateSelectorText}>{formatDate(selectedDate)}</Text>
+                <Text style={styles.dateSelectorArrow}>›</Text>
+              </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={selectedDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event, date) => {
+                    setShowDatePicker(Platform.OS === 'ios');
+                    if (date) {
+                      setSelectedDate(date);
+                    }
+                  }}
+                  maximumDate={new Date()}
+                  locale="ko-KR"
+                />
+              )}
+
               <Text style={styles.inputLabel}>코스명</Text>
               <View style={styles.courseInputRow}>
                 <TextInput
@@ -639,16 +697,6 @@ export default function RoundScreen() {
                     placeholderTextColor={COLORS.textMuted}
                     value={roundData.companions}
                     onChangeText={(text) => setRoundData({ ...roundData, companions: text })}
-                  />
-
-                  <Text style={styles.inputLabel}>비용</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="총 비용 (원)"
-                    placeholderTextColor={COLORS.textMuted}
-                    keyboardType="numeric"
-                    value={roundData.cost}
-                    onChangeText={(text) => setRoundData({ ...roundData, cost: text })}
                   />
                 </>
               )}
@@ -1046,6 +1094,27 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginBottom: 10,
     marginTop: 16,
+  },
+  dateSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    padding: 16,
+  },
+  dateSelectorIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  dateSelectorText: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  dateSelectorArrow: {
+    fontSize: 20,
+    color: COLORS.textSecondary,
   },
   textInput: {
     backgroundColor: COLORS.backgroundGray,
