@@ -6,7 +6,6 @@ import { COLORS } from '../theme/premium';
 import HomeScreen from '../screens/HomeScreen';
 import PracticeScreen from '../screens/PracticeScreen';
 import RoundScreen from '../screens/RoundScreen';
-import SummaryScreen from '../screens/SummaryScreen';
 import StatsScreen from '../screens/StatsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
@@ -59,16 +58,6 @@ export default function TabNavigator() {
           headerShown: false,
           tabBarIcon: ({ focused }) => (
             <TabIcon emoji="🚩" label="라운드" focused={focused} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="요약"
-        component={SummaryScreen}
-        options={{
-          headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="📊" label="요약" focused={focused} />
           ),
         }}
       />

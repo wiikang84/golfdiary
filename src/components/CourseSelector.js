@@ -60,14 +60,8 @@ export default function CourseSelector({ visible, onClose, onSelect, roundType }
   // 초기 로드 시 설정
   useEffect(() => {
     if (visible) {
-      // 라운드 타입에 따라 기본 필터 설정
-      if (roundType === 'screen') {
-        setSelectedType('screen');
-      } else if (roundType === 'field') {
-        setSelectedType('field');
-      } else {
-        setSelectedType('all');
-      }
+      // 스크린/필드 상관없이 모든 골프장 검색 가능하도록 'all'로 설정
+      setSelectedType('all');
       setSearchQuery('');
       setSelectedRegionGroup('전체');
       setSelectedRegion('전체');

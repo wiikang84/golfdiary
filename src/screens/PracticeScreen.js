@@ -24,6 +24,7 @@ export default function PracticeScreen() {
     location: '',
     clubs: [],
     practiceTime: '',
+    ballCount: '',
     focus: [],
     memo: '',
     selectedDate: new Date(),
@@ -100,6 +101,7 @@ export default function PracticeScreen() {
       location: '',
       clubs: [],
       practiceTime: '',
+      ballCount: '',
       focus: [],
       memo: '',
       selectedDate: new Date(),
@@ -114,6 +116,7 @@ export default function PracticeScreen() {
       location: practice.location || '',
       clubs: practice.clubs || [],
       practiceTime: practice.practiceTime || '',
+      ballCount: practice.ballCount || '',
       focus: practice.focus || [],
       memo: practice.memo || '',
       selectedDate: practice.selectedDate ? new Date(practice.selectedDate) : new Date(),
@@ -149,6 +152,7 @@ export default function PracticeScreen() {
       location: '',
       clubs: [],
       practiceTime: '',
+      ballCount: '',
       focus: [],
       memo: '',
       selectedDate: new Date(),
@@ -188,9 +192,17 @@ export default function PracticeScreen() {
                   <Text style={styles.cardDate}>{practice.date}</Text>
                   <Text style={styles.cardLocation}>{practice.location || '연습장'}</Text>
                 </View>
-                <View style={styles.timeBadge}>
-                  <Text style={styles.timeCount}>{practice.practiceTime || 0}</Text>
-                  <Text style={styles.timeLabel}>분</Text>
+                <View style={styles.headerBadges}>
+                  {practice.ballCount && (
+                    <View style={styles.ballBadge}>
+                      <Text style={styles.ballCount}>{practice.ballCount}</Text>
+                      <Text style={styles.ballLabel}>공</Text>
+                    </View>
+                  )}
+                  <View style={styles.timeBadge}>
+                    <Text style={styles.timeCount}>{practice.practiceTime || 0}</Text>
+                    <Text style={styles.timeLabel}>분</Text>
+                  </View>
                 </View>
               </View>
               <View style={styles.cardBody}>
@@ -317,6 +329,17 @@ export default function PracticeScreen() {
                 keyboardType="numeric"
                 value={practiceData.practiceTime}
                 onChangeText={(text) => setPracticeData({ ...practiceData, practiceTime: text })}
+              />
+
+              {/* 연습 공 개수 */}
+              <Text style={styles.inputLabel}>연습 공 개수</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="친 공 개수"
+                placeholderTextColor={COLORS.textMuted}
+                keyboardType="numeric"
+                value={practiceData.ballCount}
+                onChangeText={(text) => setPracticeData({ ...practiceData, ballCount: text })}
               />
 
               {/* 연습 포커스 */}
@@ -459,6 +482,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textWhite,
     marginTop: 2,
+  },
+  headerBadges: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  ballBadge: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  ballCount: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textWhite,
+  },
+  ballLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginLeft: 2,
   },
   timeBadge: {
     backgroundColor: 'rgba(255,255,255,0.2)',

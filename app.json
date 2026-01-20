@@ -2,7 +2,7 @@
   "expo": {
     "name": "Golf Diary",
     "slug": "golf-diary",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -23,7 +23,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.bitnappa.golfdiary",
-      "versionCode": 5,
+      "versionCode": 6,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",

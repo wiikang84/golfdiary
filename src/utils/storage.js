@@ -91,11 +91,13 @@ export const calculateStats = async () => {
   const allRounds = [...screenRounds, ...fieldRounds];
   const scores = allRounds.map(r => parseInt(r.score)).filter(s => !isNaN(s));
   const totalPracticeTime = practices.reduce((sum, p) => sum + (parseInt(p.practiceTime) || 0), 0);
+  const totalBalls = practices.reduce((sum, p) => sum + (parseInt(p.ballCount) || 0), 0);
 
   return {
     totalPractices: practices.length,
     totalPracticeTime,
     totalPracticeHours: Math.floor(totalPracticeTime / 60),
+    totalBalls,
     totalScreenRounds: screenRounds.length,
     totalFieldRounds: fieldRounds.length,
     avgScore: scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
@@ -181,6 +183,46 @@ export const loadUserProfile = async () => {
   } catch (error) {
     console.error('프로필 불러오기 실패:', error);
     return { nickname: '골퍼' };
+  }
+};
+
+// 전체 데이터 내보내기 (백업용)
+export const exportAllData = async () => {
+  const practices = await loadPractices();
+  const screenRounds = await loadScreenRounds();
+  const fieldRounds = await loadFieldRounds();
+  const userProfile = await loadUserProfile();
+
+  return {
+    version: '1.0',
+    exportDate: new Date().toISOString(),
+    data: {
+      practices,
+      screenRounds,
+      fieldRounds,
+      userProfile,
+    },
+  };
+};
+
+// 데이터 가져오기 (복원용)
+export const importAllData = async (backupData) => {
+  try {
+    if (!backupData || !backupData.data) {
+      throw new Error('잘못된 백업 파일 형식입니다.');
+    }
+
+    const { practices, screenRounds, fieldRounds, userProfile } = backupData.data;
+
+    if (practices) await savePractices(practices);
+    if (screenRounds) await saveScreenRounds(screenRounds);
+    if (fieldRounds) await saveFieldRounds(fieldRounds);
+    if (userProfile) await saveUserProfile(userProfile);
+
+    return { success: true };
+  } catch (error) {
+    console.error('데이터 복원 실패:', error);
+    return { success: false, error: error.message };
   }
 };
 

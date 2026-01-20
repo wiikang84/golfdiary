@@ -283,6 +283,11 @@ export default function StatsScreen() {
                 <Text style={styles.practiceValue}>{stats.totalPracticeHours}</Text>
                 <Text style={styles.practiceLabel}>총 연습 시간(h)</Text>
               </View>
+              <View style={styles.practiceDivider} />
+              <View style={styles.practiceItem}>
+                <Text style={styles.practiceValue}>{stats.totalBalls || 0}</Text>
+                <Text style={styles.practiceLabel}>총 연습 공</Text>
+              </View>
             </View>
           </View>
         )}
