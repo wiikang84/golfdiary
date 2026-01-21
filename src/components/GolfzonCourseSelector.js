@@ -9,10 +9,12 @@ import {
   Modal,
   Platform,
   KeyboardAvoidingView,
+  Image,
 } from 'react-native';
 import { COLORS, SHADOWS } from '../theme/premium';
 import { GOLFZON_CLUBS, GOLFZON_REGIONS } from '../data/golfzonClubs';
 import golfzonHoles from '../data/golfzonHoles.json';
+import golfzonDifficulty from '../data/golfzonDifficulty.json';
 
 const isWeb = Platform.OS === 'web';
 
@@ -145,6 +147,19 @@ export default function GolfzonCourseSelector({ visible, onClose, onSelect }) {
   const formatDistance = (meters) => {
     if (!meters) return '';
     return `${meters.toLocaleString()}m`;
+  };
+
+  // 난이도를 별점으로 변환 (0-10 → ★★★★☆ 형식)
+  const renderStars = (difficulty) => {
+    if (!difficulty && difficulty !== 0) return '—';
+    // 0-10을 0-5로 변환
+    const stars = Math.round(difficulty / 2);
+    return '★'.repeat(stars) + '☆'.repeat(5 - stars);
+  };
+
+  // 난이도 정보 가져오기
+  const getDifficultyInfo = (clubId) => {
+    return golfzonDifficulty[clubId] || null;
   };
 
   // 코스 조합 생성 (27홀 이상)
@@ -306,34 +321,65 @@ export default function GolfzonCourseSelector({ visible, onClose, onSelect }) {
               <Text style={styles.emptyText}>검색 결과가 없습니다</Text>
             </View>
           ) : (
-            filteredClubs.map(club => (
-              <TouchableOpacity
-                key={club.id}
-                style={styles.clubCard}
-                onPress={() => handleClubSelect(club)}
-              >
-                <View style={styles.clubCardHeader}>
-                  <View style={styles.regionBadge}>
-                    <Text style={styles.regionBadgeText}>{club.region}</Text>
-                  </View>
-                  {/* 해외 골프장은 원본 지역 표시 */}
-                  {club.region === '해외' && club.originalRegion && (
-                    <View style={styles.subRegionBadge}>
-                      <Text style={styles.subRegionBadgeText}>{club.originalRegion}</Text>
+            filteredClubs.map(club => {
+              const diffInfo = getDifficultyInfo(club.id);
+              return (
+                <TouchableOpacity
+                  key={club.id}
+                  style={styles.clubCard}
+                  onPress={() => handleClubSelect(club)}
+                >
+                  <View style={styles.clubCardRow}>
+                    {/* 로고 이미지 */}
+                    {diffInfo?.logoImage ? (
+                      <Image
+                        source={{ uri: diffInfo.logoImage }}
+                        style={styles.clubLogo}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <View style={[styles.clubLogo, styles.clubLogoPlaceholder]}>
+                        <Text style={styles.clubLogoText}>⛳</Text>
+                      </View>
+                    )}
+
+                    <View style={styles.clubCardContent}>
+                      <View style={styles.clubCardHeader}>
+                        <View style={styles.regionBadge}>
+                          <Text style={styles.regionBadgeText}>{club.region}</Text>
+                        </View>
+                        {club.region === '해외' && club.originalRegion && (
+                          <View style={styles.subRegionBadge}>
+                            <Text style={styles.subRegionBadgeText}>{club.originalRegion}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.clubName} numberOfLines={1}>{club.name}</Text>
+
+                      <View style={styles.clubInfoRow}>
+                        <Text style={styles.clubInfoText}>
+                          {club.totalHoles}홀 / {formatDistance(club.totalDistance)}
+                        </Text>
+                      </View>
+
+                      {/* 난이도 표시 */}
+                      {diffInfo && (
+                        <View style={styles.difficultyRow}>
+                          <View style={styles.difficultyItem}>
+                            <Text style={styles.difficultyLabel}>코스</Text>
+                            <Text style={styles.difficultyStars}>{renderStars(diffInfo.difficultyCc)}</Text>
+                          </View>
+                          <View style={styles.difficultyItem}>
+                            <Text style={styles.difficultyLabel}>그린</Text>
+                            <Text style={styles.difficultyStars}>{renderStars(diffInfo.difficultyGreen)}</Text>
+                          </View>
+                        </View>
+                      )}
                     </View>
-                  )}
-                  <Text style={styles.clubName} numberOfLines={1}>{club.name}</Text>
-                </View>
-                <View style={styles.clubCardBody}>
-                  <Text style={styles.clubInfo}>
-                    홀/거리    {club.totalHoles}홀 / {formatDistance(club.totalDistance)}
-                  </Text>
-                  <Text style={styles.clubCourses}>
-                    코스: {club.courses.join(', ')}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
+                  </View>
+                </TouchableOpacity>
+              );
+            })
           )}
 
           {/* 직접입력 영역 */}
@@ -521,45 +567,93 @@ const styles = StyleSheet.create({
   clubCard: {
     backgroundColor: COLORS.backgroundGray,
     borderRadius: 12,
-    padding: 14,
+    padding: 12,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: COLORS.divider,
   },
+  clubCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  clubLogo: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: COLORS.cardBg,
+    marginRight: 12,
+  },
+  clubLogoPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+  },
+  clubLogoText: {
+    fontSize: 24,
+  },
+  clubCardContent: {
+    flex: 1,
+  },
   clubCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   regionBadge: {
     backgroundColor: COLORS.primary + '20',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
     marginRight: 6,
   },
   regionBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: COLORS.primary,
   },
   subRegionBadge: {
     backgroundColor: COLORS.info + '20',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginRight: 6,
   },
   subRegionBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '500',
     color: COLORS.info,
   },
   clubName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: COLORS.textPrimary,
-    flex: 1,
+    marginBottom: 4,
+  },
+  clubInfoRow: {
+    marginBottom: 4,
+  },
+  clubInfoText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  difficultyRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  difficultyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  difficultyLabel: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  difficultyStars: {
+    fontSize: 11,
+    color: '#F5A623',
+    letterSpacing: -1,
   },
   clubCardBody: {
     paddingLeft: 2,
