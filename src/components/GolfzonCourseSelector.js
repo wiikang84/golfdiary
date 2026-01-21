@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,8 @@ import golfzonDifficulty from '../data/golfzonDifficulty.json';
 const isWeb = Platform.OS === 'web';
 
 export default function GolfzonCourseSelector({ visible, onClose, onSelect }) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState(''); // 입력값
+  const [searchQuery, setSearchQuery] = useState(''); // 실제 검색어 (디바운스 적용)
   const [selectedRegion, setSelectedRegion] = useState('전체');
   const [filteredClubs, setFilteredClubs] = useState([]);
 
@@ -37,6 +38,7 @@ export default function GolfzonCourseSelector({ visible, onClose, onSelect }) {
   // 초기 로드
   useEffect(() => {
     if (visible) {
+      setSearchInput('');
       setSearchQuery('');
       setSelectedRegion('전체');
       setSelectedClub(null);
@@ -44,6 +46,14 @@ export default function GolfzonCourseSelector({ visible, onClose, onSelect }) {
       setCustomCourseName('');
     }
   }, [visible]);
+
+  // 검색어 디바운스 (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   // 검색 및 필터링
   useEffect(() => {
@@ -397,12 +407,15 @@ export default function GolfzonCourseSelector({ visible, onClose, onSelect }) {
               style={styles.searchInput}
               placeholder="검색어를 입력해 주세요"
               placeholderTextColor={COLORS.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
+              value={searchInput}
+              onChangeText={setSearchInput}
               autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              onSubmitEditing={() => setSearchQuery(searchInput)}
             />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
+            {searchInput.length > 0 && (
+              <TouchableOpacity onPress={() => { setSearchInput(''); setSearchQuery(''); }}>
                 <Text style={styles.clearButton}>✕</Text>
               </TouchableOpacity>
             )}

@@ -265,12 +265,12 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
           {/* 총 스코어 요약 */}
           <View style={styles.summaryBar}>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>전반(OUT)</Text>
+              <Text style={styles.summaryLabel}>{frontCourseName || '전반(OUT)'}</Text>
               <Text style={styles.summaryValue}>{totals.front9 || '-'}</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>후반(IN)</Text>
+              <Text style={styles.summaryLabel}>{backCourseName || '후반(IN)'}</Text>
               <Text style={styles.summaryValue}>{totals.back9 || '-'}</Text>
             </View>
             <View style={styles.summaryDivider} />

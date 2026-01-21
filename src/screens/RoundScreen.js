@@ -66,6 +66,7 @@ export default function RoundScreen() {
     photos: [],
     holeScores: null,
     holePars: null,
+    courseNames: null, // { front: '이지', back: '스카이' }
   });
 
   // 갤러리에서 사진 선택
@@ -196,10 +197,17 @@ export default function RoundScreen() {
   const handleCourseSelect = (course) => {
     if (course) {
       setSelectedCourse(course);
+
+      // 골프존 코스 선택 시 코스명 저장 (frontName, backName)
+      const courseNames = course.frontName && course.backName
+        ? { front: course.frontName, back: course.backName }
+        : null;
+
       setRoundData(prev => ({
         ...prev,
         courseName: course.name,
         holePars: course.holes,
+        courseNames: courseNames,
       }));
 
       // 기본 PAR 사용 시 안내 메시지 (실제 코스 데이터가 없는 경우)
@@ -227,6 +235,7 @@ export default function RoundScreen() {
     setModalVisible(false);
     setIsEditMode(false);
     setEditingRound(null);
+    setSelectedCourse(null);
     setRoundData({
       courseName: '',
       score: '',
@@ -240,6 +249,7 @@ export default function RoundScreen() {
       photos: [],
       holeScores: null,
       holePars: null,
+      courseNames: null,
     });
   };
 
@@ -778,6 +788,7 @@ export default function RoundScreen() {
         onSave={handleScoreSave}
         initialScores={roundData.holeScores}
         initialPars={roundData.holePars || (selectedCourse ? selectedCourse.holes : null)}
+        initialCourseNames={roundData.courseNames}
       />
 
       {/* 코스 선택 모달 - 골프존 데이터 사용 */}
