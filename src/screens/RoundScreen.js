@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Image,
   Alert,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -19,6 +20,7 @@ import { COLORS, SHADOWS } from '../theme/premium';
 import { saveScreenRounds, loadScreenRounds, saveFieldRounds, loadFieldRounds } from '../utils/storage';
 import ScoreInput from '../components/ScoreInput';
 import CourseSelector from '../components/CourseSelector';
+import GolfzonCourseSelector from '../components/GolfzonCourseSelector';
 
 const SCREEN_VENUES = ['골프존', 'SG골프', '카카오VX', '기타'];
 const WEATHER_OPTIONS = ['맑음', '흐림', '비', '바람'];
@@ -38,6 +40,7 @@ export default function RoundScreen() {
   const [selectedCourse, setSelectedCourse] = useState(null); // 선택된 코스
   const [selectedDate, setSelectedDate] = useState(new Date()); // 선택된 날짜
   const [showDatePicker, setShowDatePicker] = useState(false); // 날짜 선택기 표시 여부
+  const scrollViewRef = useRef(null);
 
   // 앱 시작시 저장된 데이터 불러오기
   useEffect(() => {
@@ -505,7 +508,10 @@ export default function RoundScreen() {
         visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <View style={styles.modalContent}>
             <View style={[
               styles.modalHeader,
@@ -539,7 +545,12 @@ export default function RoundScreen() {
               </View>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              ref={scrollViewRef}
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               {/* 날짜 선택 */}
               <Text style={styles.inputLabel}>날짜</Text>
               <TouchableOpacity
@@ -740,7 +751,14 @@ export default function RoundScreen() {
                 numberOfLines={4}
                 value={roundData.memo}
                 onChangeText={(text) => setRoundData({ ...roundData, memo: text })}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                  }, 300);
+                }}
               />
+              {/* 키보드 여백 */}
+              <View style={styles.keyboardSpace} />
             </ScrollView>
 
             <TouchableOpacity
@@ -750,7 +768,7 @@ export default function RoundScreen() {
               <Text style={styles.saveButtonText}>{isEditMode ? '수정하기' : '저장하기'}</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* 18홀 스코어 입력 모달 */}
@@ -762,13 +780,21 @@ export default function RoundScreen() {
         initialPars={roundData.holePars || (selectedCourse ? selectedCourse.holes : null)}
       />
 
-      {/* 코스 선택 모달 */}
+      {/* 코스 선택 모달 - 골프존 데이터 사용 */}
+      <GolfzonCourseSelector
+        visible={courseSelectorVisible}
+        onClose={() => setCourseSelectorVisible(false)}
+        onSelect={handleCourseSelect}
+      />
+
+      {/* 기존 CourseSelector (주석 처리)
       <CourseSelector
         visible={courseSelectorVisible}
         onClose={() => setCourseSelectorVisible(false)}
         onSelect={handleCourseSelect}
         roundType={activeTab}
       />
+      */}
 
       {/* 사진 크게 보기 모달 */}
       <Modal
@@ -1321,5 +1347,8 @@ const styles = StyleSheet.create({
   photoModalImage: {
     width: '90%',
     height: '70%',
+  },
+  keyboardSpace: {
+    height: 150,
   },
 });

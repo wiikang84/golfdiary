@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Modal,
   Platform,
   Alert,
+  KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { COLORS, SHADOWS } from '../theme/premium';
@@ -31,6 +33,7 @@ export default function PracticeScreen() {
   });
   const [practices, setPractices] = useState([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const scrollViewRef = useRef(null);
 
   // 앱 시작시 저장된 데이터 불러오기
   useEffect(() => {
@@ -253,7 +256,10 @@ export default function PracticeScreen() {
         visible={modalVisible}
         onRequestClose={handleCloseModal}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{editingPractice ? '연습 기록 수정' : '새 연습 기록'}</Text>
@@ -265,7 +271,12 @@ export default function PracticeScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              ref={scrollViewRef}
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               {/* 날짜 선택 */}
               <Text style={styles.inputLabel}>연습 날짜</Text>
               <TouchableOpacity
@@ -374,14 +385,22 @@ export default function PracticeScreen() {
                 numberOfLines={4}
                 value={practiceData.memo}
                 onChangeText={(text) => setPracticeData({ ...practiceData, memo: text })}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                  }, 300);
+                }}
               />
+
+              {/* 키보드 여백 */}
+              <View style={styles.keyboardSpace} />
             </ScrollView>
 
             <TouchableOpacity style={styles.saveButton} onPress={savePractice}>
               <Text style={styles.saveButtonText}>저장하기</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -707,5 +726,8 @@ const styles = StyleSheet.create({
   dateArrow: {
     fontSize: 20,
     color: COLORS.textMuted,
+  },
+  keyboardSpace: {
+    height: 150,
   },
 });

@@ -432,6 +432,7 @@ export default function ScoreInput({ visible, onClose, onSave, initialScores, in
                   { score: par + 1, label: '😅', subLabel: '보기', color: COLORS.scoreBogey },
                   { score: par + 2, label: '😓', subLabel: '더블', color: COLORS.scoreDouble },
                   { score: par + 3, label: '😱', subLabel: '+3', color: COLORS.scoreTriple },
+                  { score: par + 4, label: '🔥', subLabel: '+4', color: '#B71C1C' },
                   { score: doublePar, label: '💀', subLabel: '양파', color: '#4A148C' },
                 ].filter(item => item.score > 0 && item.score <= doublePar);
 
