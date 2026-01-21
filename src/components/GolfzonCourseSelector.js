@@ -27,6 +27,10 @@ export default function GolfzonCourseSelector({ visible, onClose, onSelect }) {
   const [selectedClub, setSelectedClub] = useState(null);
   const [step, setStep] = useState('list'); // 'list' | 'courses'
 
+  // 간소화된 코스 선택 상태
+  const [frontCourse, setFrontCourse] = useState('');
+  const [backCourse, setBackCourse] = useState('');
+
   // 직접입력 상태
   const [customCourseName, setCustomCourseName] = useState('');
 
@@ -67,8 +71,11 @@ export default function GolfzonCourseSelector({ visible, onClose, onSelect }) {
     const holeData = golfzonHoles[club.id];
 
     if (holeData && holeData.courses.length >= 2) {
-      // 2코스 이상: 코스 조합 선택 화면으로 (18홀도 순서 선택 가능)
+      // 2코스 이상: 기본 코스 자동 설정 후 확인 화면으로
       setSelectedClub(club);
+      // 기본값: 첫 번째 코스 → 두 번째 코스
+      setFrontCourse(holeData.courses[0].courseName);
+      setBackCourse(holeData.courses[1].courseName);
       setStep('courses');
     } else {
       // 홀 데이터 없는 경우: 기본 파로 선택
@@ -85,6 +92,19 @@ export default function GolfzonCourseSelector({ visible, onClose, onSelect }) {
       });
       onClose();
     }
+  };
+
+  // 전반/후반 스왑
+  const handleSwap = () => {
+    const temp = frontCourse;
+    setFrontCourse(backCourse);
+    setBackCourse(temp);
+  };
+
+  // 코스 확정
+  const handleConfirmCourse = () => {
+    if (!selectedClub || !frontCourse || !backCourse) return;
+    handleCourseSelect(frontCourse, backCourse);
   };
 
   // 코스 조합 선택 (27홀 이상)
@@ -186,11 +206,24 @@ export default function GolfzonCourseSelector({ visible, onClose, onSelect }) {
     return combinations;
   };
 
-  // 코스 선택 화면 (27홀 이상)
+  // 코스 선택 화면 (간소화 버전)
   const renderCoursesView = () => {
     if (!selectedClub) return null;
-    const combinations = getCourseCombinations();
     const holeData = golfzonHoles[selectedClub.id];
+    const diffInfo = getDifficultyInfo(selectedClub.id);
+
+    // 현재 선택된 코스의 파/거리 계산
+    const front = holeData?.courses.find(c => c.courseName === frontCourse);
+    const back = holeData?.courses.find(c => c.courseName === backCourse);
+    const frontDist = front?.holes.reduce((sum, h) => sum + (h.frontTee || 0), 0) || 0;
+    const backDist = back?.holes.reduce((sum, h) => sum + (h.frontTee || 0), 0) || 0;
+    const totalDist = frontDist + backDist;
+    const frontPar = front?.holes.reduce((sum, h) => sum + h.par, 0) || 36;
+    const backPar = back?.holes.reduce((sum, h) => sum + h.par, 0) || 36;
+
+    // 27홀 이상인 경우 다른 코스 옵션 표시
+    const availableCourses = holeData?.courses.map(c => c.courseName) || [];
+    const isMultiCourse = availableCourses.length > 2;
 
     return (
       <>
@@ -202,56 +235,126 @@ export default function GolfzonCourseSelector({ visible, onClose, onSelect }) {
           <View style={styles.backButton} />
         </View>
 
-        <View style={styles.combinationInfo}>
-          <Text style={styles.combinationLabel}>코스 순서를 선택하세요</Text>
-          <Text style={styles.combinationDesc}>
-            코스: {selectedClub.courses.join(' / ')} ({selectedClub.totalHoles}홀 중 18홀 선택)
-          </Text>
-        </View>
-
         <ScrollView style={styles.resultsList} showsVerticalScrollIndicator={false}>
-          {combinations.map((combo, idx) => {
-            // 조합별 거리 계산
-            const front = holeData?.courses.find(c => c.courseName === combo.front);
-            const back = holeData?.courses.find(c => c.courseName === combo.back);
-            const frontDist = front?.holes.reduce((sum, h) => sum + (h.frontTee || 0), 0) || 0;
-            const backDist = back?.holes.reduce((sum, h) => sum + (h.frontTee || 0), 0) || 0;
-            const totalDist = frontDist + backDist;
-
-            // 파 계산
-            const frontPar = front?.holes.reduce((sum, h) => sum + h.par, 0) || 36;
-            const backPar = back?.holes.reduce((sum, h) => sum + h.par, 0) || 36;
-
-            return (
-              <TouchableOpacity
-                key={idx}
-                style={styles.courseItem}
-                onPress={() => handleCourseSelect(combo.front, combo.back)}
-              >
-                <View style={styles.courseInfo}>
-                  {/* 전반/후반 표시 */}
-                  <View style={styles.courseComboRow}>
-                    <View style={styles.courseHalfBox}>
-                      <Text style={styles.courseHalfLabel}>전반</Text>
-                      <Text style={styles.courseHalfName}>{combo.front}</Text>
-                      <Text style={styles.courseHalfPar}>PAR {frontPar}</Text>
-                    </View>
-                    <Text style={styles.courseArrow}>→</Text>
-                    <View style={styles.courseHalfBox}>
-                      <Text style={styles.courseHalfLabel}>후반</Text>
-                      <Text style={styles.courseHalfName}>{combo.back}</Text>
-                      <Text style={styles.courseHalfPar}>PAR {backPar}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.courseDistance}>
-                    18홀 / {formatDistance(totalDist)} / PAR {frontPar + backPar}
-                  </Text>
+          {/* 골프장 정보 카드 */}
+          <View style={styles.clubDetailCard}>
+            {diffInfo?.logoImage ? (
+              <Image
+                source={{ uri: diffInfo.logoImage }}
+                style={styles.clubDetailLogo}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={[styles.clubDetailLogo, styles.clubLogoPlaceholder]}>
+                <Text style={styles.clubLogoText}>⛳</Text>
+              </View>
+            )}
+            <View style={styles.clubDetailInfo}>
+              <Text style={styles.clubDetailName}>{selectedClub.name}</Text>
+              <Text style={styles.clubDetailMeta}>
+                {selectedClub.totalHoles}홀 / {formatDistance(selectedClub.totalDistance)}
+              </Text>
+              {diffInfo && (
+                <View style={styles.difficultyRowDetail}>
+                  <Text style={styles.difficultyLabelDetail}>코스 {renderStars(diffInfo.difficultyCc)}</Text>
+                  <Text style={styles.difficultyLabelDetail}>그린 {renderStars(diffInfo.difficultyGreen)}</Text>
                 </View>
+              )}
+            </View>
+          </View>
+
+          {/* 코스 선택 영역 */}
+          <View style={styles.courseSelectSection}>
+            <Text style={styles.courseSelectTitle}>코스 순서</Text>
+
+            <View style={styles.courseSelectBox}>
+              {/* 전반 */}
+              <View style={styles.courseHalfBoxLarge}>
+                <Text style={styles.courseHalfLabelLarge}>전반</Text>
+                <Text style={styles.courseHalfNameLarge}>{frontCourse}</Text>
+                <Text style={styles.courseHalfParLarge}>PAR {frontPar}</Text>
+                <Text style={styles.courseHalfDist}>{formatDistance(frontDist)}</Text>
+              </View>
+
+              {/* 스왑 버튼 */}
+              <TouchableOpacity style={styles.swapButton} onPress={handleSwap}>
+                <Text style={styles.swapButtonText}>⇄</Text>
+                <Text style={styles.swapButtonLabel}>스왑</Text>
               </TouchableOpacity>
-            );
-          })}
+
+              {/* 후반 */}
+              <View style={styles.courseHalfBoxLarge}>
+                <Text style={styles.courseHalfLabelLarge}>후반</Text>
+                <Text style={styles.courseHalfNameLarge}>{backCourse}</Text>
+                <Text style={styles.courseHalfParLarge}>PAR {backPar}</Text>
+                <Text style={styles.courseHalfDist}>{formatDistance(backDist)}</Text>
+              </View>
+            </View>
+
+            {/* 총 정보 */}
+            <View style={styles.courseTotalInfo}>
+              <Text style={styles.courseTotalText}>
+                총 18홀 / {formatDistance(totalDist)} / PAR {frontPar + backPar}
+              </Text>
+            </View>
+          </View>
+
+          {/* 27홀 이상: 다른 코스 선택 옵션 */}
+          {isMultiCourse && (
+            <View style={styles.otherCoursesSection}>
+              <Text style={styles.otherCoursesTitle}>코스 변경</Text>
+              <View style={styles.otherCoursesRow}>
+                <View style={styles.coursePickerContainer}>
+                  <Text style={styles.coursePickerLabel}>전반</Text>
+                  <View style={styles.coursePickerButtons}>
+                    {availableCourses.filter(c => c !== backCourse).map(course => (
+                      <TouchableOpacity
+                        key={course}
+                        style={[
+                          styles.coursePickerBtn,
+                          frontCourse === course && styles.coursePickerBtnActive
+                        ]}
+                        onPress={() => setFrontCourse(course)}
+                      >
+                        <Text style={[
+                          styles.coursePickerBtnText,
+                          frontCourse === course && styles.coursePickerBtnTextActive
+                        ]}>{course}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+                <View style={styles.coursePickerContainer}>
+                  <Text style={styles.coursePickerLabel}>후반</Text>
+                  <View style={styles.coursePickerButtons}>
+                    {availableCourses.filter(c => c !== frontCourse).map(course => (
+                      <TouchableOpacity
+                        key={course}
+                        style={[
+                          styles.coursePickerBtn,
+                          backCourse === course && styles.coursePickerBtnActive
+                        ]}
+                        onPress={() => setBackCourse(course)}
+                      >
+                        <Text style={[
+                          styles.coursePickerBtnText,
+                          backCourse === course && styles.coursePickerBtnTextActive
+                        ]}>{course}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
+
           <View style={styles.bottomSpace} />
         </ScrollView>
+
+        {/* 확인 버튼 */}
+        <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmCourse}>
+          <Text style={styles.confirmButtonText}>이 코스로 시작</Text>
+        </TouchableOpacity>
       </>
     );
   };
@@ -845,6 +948,195 @@ const styles = StyleSheet.create({
   },
 
   bottomSpace: {
-    height: 30,
+    height: 100,
+  },
+
+  // 간소화된 코스 선택 화면 스타일
+  clubDetailCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  clubDetailLogo: {
+    width: 70,
+    height: 70,
+    borderRadius: 10,
+    backgroundColor: COLORS.cardBg,
+    marginRight: 14,
+  },
+  clubDetailInfo: {
+    flex: 1,
+  },
+  clubDetailName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  clubDetailMeta: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginBottom: 6,
+  },
+  difficultyRowDetail: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  difficultyLabelDetail: {
+    fontSize: 12,
+    color: '#F5A623',
+  },
+
+  // 코스 선택 박스
+  courseSelectSection: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+  },
+  courseSelectTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  courseSelectBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  courseHalfBoxLarge: {
+    flex: 1,
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  courseHalfLabelLarge: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginBottom: 4,
+  },
+  courseHalfNameLarge: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  courseHalfParLarge: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+    marginBottom: 2,
+  },
+  courseHalfDist: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  swapButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 10,
+    ...SHADOWS.medium,
+  },
+  swapButtonText: {
+    fontSize: 24,
+    color: COLORS.textWhite,
+    fontWeight: '700',
+  },
+  swapButtonLabel: {
+    fontSize: 10,
+    color: COLORS.textWhite,
+    marginTop: 2,
+  },
+  courseTotalInfo: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.divider,
+    alignItems: 'center',
+  },
+  courseTotalText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+
+  // 27홀 이상 코스 변경
+  otherCoursesSection: {
+    backgroundColor: COLORS.backgroundGray,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  otherCoursesTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 12,
+  },
+  otherCoursesRow: {
+    gap: 12,
+  },
+  coursePickerContainer: {
+    marginBottom: 8,
+  },
+  coursePickerLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginBottom: 6,
+  },
+  coursePickerButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  coursePickerBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+  },
+  coursePickerBtnActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  coursePickerBtnText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  coursePickerBtnTextActive: {
+    color: COLORS.textWhite,
+  },
+
+  // 확인 버튼
+  confirmButton: {
+    position: 'absolute',
+    bottom: 20,
+    left: 16,
+    right: 16,
+    backgroundColor: COLORS.primary,
+    borderRadius: 14,
+    padding: 18,
+    alignItems: 'center',
+    ...SHADOWS.medium,
+  },
+  confirmButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.textWhite,
   },
 });
