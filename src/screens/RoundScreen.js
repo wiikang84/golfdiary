@@ -7,12 +7,10 @@ import {
   ScrollView,
   TextInput,
   Modal,
-  Image,
   Alert,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const isWeb = Platform.OS === 'web';
@@ -31,8 +29,6 @@ export default function RoundScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [screenRounds, setScreenRounds] = useState([]);
   const [fieldRounds, setFieldRounds] = useState([]);
-  const [photoModalVisible, setPhotoModalVisible] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [scoreInputVisible, setScoreInputVisible] = useState(false);
   const [editingRound, setEditingRound] = useState(null); // 수정 중인 라운드
   const [isEditMode, setIsEditMode] = useState(false); // 수정 모드 여부
@@ -63,71 +59,10 @@ export default function RoundScreen() {
     companions: '',
     cost: '',
     memo: '',
-    photos: [],
     holeScores: null,
     holePars: null,
     courseNames: null, // { front: '이지', back: '스카이' }
   });
-
-  // 갤러리에서 사진 선택
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('권한 필요', '사진을 선택하려면 갤러리 접근 권한이 필요합니다.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      quality: 0.7,
-      selectionLimit: 5,
-    });
-
-    if (!result.canceled && result.assets) {
-      const newPhotos = result.assets.map(asset => asset.uri);
-      setRoundData(prev => ({
-        ...prev,
-        photos: [...prev.photos, ...newPhotos].slice(0, 5),
-      }));
-    }
-  };
-
-  // 카메라로 사진 촬영
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('권한 필요', '사진을 촬영하려면 카메라 접근 권한이 필요합니다.');
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-    });
-
-    if (!result.canceled && result.assets) {
-      const newPhoto = result.assets[0].uri;
-      setRoundData(prev => ({
-        ...prev,
-        photos: [...prev.photos, newPhoto].slice(0, 5),
-      }));
-    }
-  };
-
-  // 사진 삭제
-  const removePhoto = (index) => {
-    setRoundData(prev => ({
-      ...prev,
-      photos: prev.photos.filter((_, i) => i !== index),
-    }));
-  };
-
-  // 사진 크게 보기
-  const viewPhoto = (uri) => {
-    setSelectedPhoto(uri);
-    setPhotoModalVisible(true);
-  };
 
   // 18홀 스코어 저장
   const handleScoreSave = (scoreData) => {
@@ -153,7 +88,6 @@ export default function RoundScreen() {
       companions: round.companions || '',
       cost: round.cost || '',
       memo: round.memo || '',
-      photos: round.photos || [],
       holeScores: round.holeScores || null,
       holePars: round.holePars || null,
     });
@@ -186,7 +120,6 @@ export default function RoundScreen() {
       companions: '',
       cost: '',
       memo: '',
-      photos: [],
       holeScores: null,
       holePars: null,
     });
@@ -246,7 +179,6 @@ export default function RoundScreen() {
       companions: '',
       cost: '',
       memo: '',
-      photos: [],
       holeScores: null,
       holePars: null,
       courseNames: null,
@@ -489,21 +421,6 @@ export default function RoundScreen() {
                 {round.memo && (
                   <Text style={styles.memoText}>{round.memo}</Text>
                 )}
-                {/* 사진 표시 */}
-                {round.photos && round.photos.length > 0 && (
-                  <View style={styles.photoGallery}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                      {round.photos.map((photo, idx) => (
-                        <TouchableOpacity
-                          key={idx}
-                          onPress={() => viewPhoto(photo)}
-                        >
-                          <Image source={{ uri: photo }} style={styles.photoThumbnail} />
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
               </View>
             </TouchableOpacity>
           ))
@@ -722,36 +639,6 @@ export default function RoundScreen() {
                 </>
               )}
 
-              {/* 사진 추가 섹션 */}
-              <Text style={styles.inputLabel}>사진 (최대 5장)</Text>
-              <View style={styles.photoSection}>
-                <View style={styles.photoButtons}>
-                  <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
-                    <Text style={styles.photoButtonIcon}>🖼️</Text>
-                    <Text style={styles.photoButtonText}>갤러리</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
-                    <Text style={styles.photoButtonIcon}>📷</Text>
-                    <Text style={styles.photoButtonText}>카메라</Text>
-                  </TouchableOpacity>
-                </View>
-                {roundData.photos.length > 0 && (
-                  <ScrollView horizontal style={styles.photoPreview} showsHorizontalScrollIndicator={false}>
-                    {roundData.photos.map((photo, idx) => (
-                      <View key={idx} style={styles.photoPreviewItem}>
-                        <Image source={{ uri: photo }} style={styles.photoPreviewImage} />
-                        <TouchableOpacity
-                          style={styles.photoRemoveButton}
-                          onPress={() => removePhoto(idx)}
-                        >
-                          <Text style={styles.photoRemoveText}>✕</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </ScrollView>
-                )}
-              </View>
-
               <Text style={styles.inputLabel}>메모</Text>
               <TextInput
                 style={[styles.textInput, styles.textArea]}
@@ -806,30 +693,6 @@ export default function RoundScreen() {
         roundType={activeTab}
       />
       */}
-
-      {/* 사진 크게 보기 모달 */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={photoModalVisible}
-        onRequestClose={() => setPhotoModalVisible(false)}
-      >
-        <View style={styles.photoModalOverlay}>
-          <TouchableOpacity
-            style={styles.photoModalClose}
-            onPress={() => setPhotoModalVisible(false)}
-          >
-            <Text style={styles.photoModalCloseText}>✕</Text>
-          </TouchableOpacity>
-          {selectedPhoto && (
-            <Image
-              source={{ uri: selectedPhoto }}
-              style={styles.photoModalImage}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
 
     </View>
   );
@@ -1046,15 +909,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: 12,
   },
-  photoGallery: {
-    marginTop: 12,
-  },
-  photoThumbnail: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    marginRight: 8,
-  },
   bottomSpace: {
     height: 30,
   },
@@ -1265,59 +1119,6 @@ const styles = StyleSheet.create({
   chipTextSelected: {
     color: COLORS.textWhite,
   },
-  photoSection: {
-    marginTop: 4,
-  },
-  photoButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  photoButton: {
-    flex: 1,
-    backgroundColor: COLORS.backgroundGray,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  photoButtonIcon: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  photoButtonText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-  },
-  photoPreview: {
-    marginTop: 12,
-  },
-  photoPreviewItem: {
-    position: 'relative',
-    marginRight: 10,
-  },
-  photoPreviewImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 10,
-  },
-  photoRemoveButton: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.error,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoRemoveText: {
-    color: COLORS.textWhite,
-    fontSize: 12,
-    fontWeight: '700',
-  },
   saveButton: {
     backgroundColor: COLORS.info,
     margin: 20,
@@ -1332,32 +1133,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: COLORS.textWhite,
-  },
-  photoModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoModalClose: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  photoModalCloseText: {
-    color: COLORS.textWhite,
-    fontSize: 22,
-  },
-  photoModalImage: {
-    width: '90%',
-    height: '70%',
   },
   keyboardSpace: {
     height: 150,
