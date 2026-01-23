@@ -38,13 +38,29 @@ export default function RoundScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false); // 날짜 선택기 표시 여부
   const scrollViewRef = useRef(null);
 
+  // 날짜 문자열을 Date 객체로 파싱하는 함수
+  const parseDate = (dateStr) => {
+    // "2024. 12. 28." 형식 파싱
+    const parts = dateStr.replace(/\./g, '').trim().split(' ').filter(p => p);
+    if (parts.length >= 3) {
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    return new Date(0); // 파싱 실패 시 가장 오래된 날짜
+  };
+
+  // 라운드 배열을 날짜 기준으로 정렬하는 함수 (최신순)
+  const sortByDate = (rounds) => {
+    return [...rounds].sort((a, b) => parseDate(b.date) - parseDate(a.date));
+  };
+
   // 앱 시작시 저장된 데이터 불러오기
   useEffect(() => {
     const loadData = async () => {
       const savedScreenRounds = await loadScreenRounds();
       const savedFieldRounds = await loadFieldRounds();
-      setScreenRounds(savedScreenRounds);
-      setFieldRounds(savedFieldRounds);
+      // 기존 데이터도 날짜 기준으로 정렬
+      setScreenRounds(sortByDate(savedScreenRounds));
+      setFieldRounds(sortByDate(savedFieldRounds));
     };
     loadData();
   }, []);
@@ -205,15 +221,27 @@ export default function RoundScreen() {
       };
 
       if (editingRound.type === 'screen') {
-        const updatedRounds = screenRounds.map(r =>
+        // 기존: 작성일 기준 (수정 시 위치 유지)
+        // const updatedRounds = screenRounds.map(r =>
+        //   r.id === editingRound.id ? updatedRound : r
+        // );
+        // 변경: 날짜 기준 정렬 (날짜 수정 시 위치 변경됨)
+        const mappedRounds = screenRounds.map(r =>
           r.id === editingRound.id ? updatedRound : r
         );
+        const updatedRounds = sortByDate(mappedRounds);
         setScreenRounds(updatedRounds);
         await saveScreenRounds(updatedRounds);
       } else {
-        const updatedRounds = fieldRounds.map(r =>
+        // 기존: 작성일 기준 (수정 시 위치 유지)
+        // const updatedRounds = fieldRounds.map(r =>
+        //   r.id === editingRound.id ? updatedRound : r
+        // );
+        // 변경: 날짜 기준 정렬 (날짜 수정 시 위치 변경됨)
+        const mappedRounds = fieldRounds.map(r =>
           r.id === editingRound.id ? updatedRound : r
         );
+        const updatedRounds = sortByDate(mappedRounds);
         setFieldRounds(updatedRounds);
         await saveFieldRounds(updatedRounds);
       }
@@ -227,11 +255,17 @@ export default function RoundScreen() {
       };
 
       if (activeTab === 'screen') {
-        const updatedRounds = [newRound, ...screenRounds];
+        // 기존: 작성일 기준 (항상 맨 위에 추가)
+        // const updatedRounds = [newRound, ...screenRounds];
+        // 변경: 날짜 기준 정렬
+        const updatedRounds = sortByDate([newRound, ...screenRounds]);
         setScreenRounds(updatedRounds);
         await saveScreenRounds(updatedRounds);
       } else {
-        const updatedRounds = [newRound, ...fieldRounds];
+        // 기존: 작성일 기준 (항상 맨 위에 추가)
+        // const updatedRounds = [newRound, ...fieldRounds];
+        // 변경: 날짜 기준 정렬
+        const updatedRounds = sortByDate([newRound, ...fieldRounds]);
         setFieldRounds(updatedRounds);
         await saveFieldRounds(updatedRounds);
       }

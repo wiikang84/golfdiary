@@ -92,62 +92,79 @@ export default function SettingsScreen() {
     Alert.alert('저장 완료', '닉네임이 변경되었습니다.');
   };
 
-  // 데이터 백업 (TXT 파일 공유 - 카카오톡에서 열기 쉽도록)
+  // 데이터 백업 (자동 분기: 글자 수에 따라 카카오톡/파일 선택)
   const handleBackup = async () => {
     try {
-      // 1. 데이터 내보내기
       const data = await exportAllData();
       const jsonString = JSON.stringify(data, null, 2);
 
-      // 디버깅: 데이터 개수 확인
       const practiceCount = data.data?.practices?.length || 0;
       const screenCount = data.data?.screenRounds?.length || 0;
       const fieldCount = data.data?.fieldRounds?.length || 0;
+      const totalCount = practiceCount + screenCount + fieldCount;
 
-      // 2. 파일 저장 (매번 새 파일명 - 시간 포함)
+      // 글자 수 체크 (카카오톡 제한: 약 10,000자)
+      const MAX_KAKAO_LENGTH = 10000;
+
+      if (jsonString.length <= MAX_KAKAO_LENGTH) {
+        // 10,000자 이하: 카카오톡으로 바로 전송
+        await Share.share({
+          message: jsonString,
+          title: `골프다이어리 백업`,
+        });
+      } else {
+        // 10,000자 초과: 파일로 저장 후 안내
+        Alert.alert(
+          '📁 기록이 많습니다!',
+          `총 ${totalCount}개의 기록이 있어서\n파일로 백업합니다.\n\n[확인]을 누르면 공유 화면이 나옵니다.\n\n👉 카카오톡 → 나와의 채팅\n👉 또는 삼성노트, 메모장 앱 추천!`,
+          [
+            { text: '취소', style: 'cancel' },
+            { text: '확인', onPress: () => saveAndShareFile(jsonString, practiceCount, screenCount, fieldCount) }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('백업 실패:', error);
+      Alert.alert('백업 오류', '백업 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 파일 저장 후 공유
+  const saveAndShareFile = async (jsonString, practiceCount, screenCount, fieldCount) => {
+    try {
       const now = new Date();
-      const timestamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
-      const fileName = `golf-diary-backup-${timestamp}.txt`;
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const day = now.getDate();
+      const fileName = `골프다이어리_백업_${year}년${month}월${day}일.txt`;
       const filePath = `${FileSystem.documentDirectory}${fileName}`;
 
-      // 기존 파일 삭제 (있으면)
       const existingFile = await FileSystem.getInfoAsync(filePath);
       if (existingFile.exists) {
         await FileSystem.deleteAsync(filePath);
       }
 
-      // 새 파일 작성
       await FileSystem.writeAsStringAsync(filePath, jsonString);
 
-      // 3. 파일 존재 확인
       const fileInfo = await FileSystem.getInfoAsync(filePath);
       if (!fileInfo.exists) {
         Alert.alert('오류', '백업 파일 생성에 실패했습니다.');
         return;
       }
 
-      // 4. 공유 가능 여부 확인 및 공유
       const isAvailable = await Sharing.isAvailableAsync();
       if (isAvailable) {
         await Sharing.shareAsync(filePath, {
           mimeType: 'text/plain',
-          dialogTitle: `Golf Diary 백업 (연습${practiceCount}, 스크린${screenCount}, 필드${fieldCount})`,
+          dialogTitle: `골프다이어리 백업 (연습${practiceCount}, 스크린${screenCount}, 필드${fieldCount})`,
           UTI: 'public.plain-text',
         });
       } else {
-        // 공유 불가시 React Native Share로 텍스트 공유
-        await Share.share({
-          message: `Golf Diary 백업 데이터\n\n${jsonString}`,
-          title: 'Golf Diary 백업',
-        });
+        Alert.alert('오류', '파일 공유 기능을 사용할 수 없습니다.');
       }
     } catch (error) {
-      console.error('백업 실패:', error);
-      Alert.alert(
-        '백업 오류',
-        `백업 중 오류가 발생했습니다.\n\n상세: ${error.message || '알 수 없는 오류'}`,
-        [{ text: '확인' }]
-      );
+      console.error('파일 저장 실패:', error);
+      Alert.alert('백업 오류', '파일 저장 중 오류가 발생했습니다.');
     }
   };
 
@@ -157,7 +174,45 @@ export default function SettingsScreen() {
     setRestoreModalVisible(true);
   };
 
-  // 복원 실행
+  // 파일에서 불러오기
+  const handleRestoreFromFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'text/plain',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const file = result.assets[0];
+      const fileContent = await FileSystem.readAsStringAsync(file.uri);
+
+      // JSON 파싱 시도
+      const backupData = JSON.parse(fileContent);
+
+      // 데이터 유효성 검사
+      if (!backupData.data && !backupData.practices) {
+        Alert.alert('오류', '올바른 백업 데이터가 아닙니다.');
+        return;
+      }
+
+      const importResult = await importAllData(backupData);
+      if (importResult.success) {
+        setRestoreModalVisible(false);
+        Alert.alert('완료', '데이터가 복원되었습니다.\n앱을 다시 시작해주세요.');
+        loadData();
+      } else {
+        Alert.alert('오류', importResult.error || '복원에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('파일 복원 실패:', error);
+      Alert.alert('오류', '파일을 읽을 수 없거나 데이터 형식이 올바르지 않습니다.');
+    }
+  };
+
+  // 복원 실행 (복사-붙여넣기 방식)
   const executeRestore = async () => {
     if (!restoreText.trim()) {
       Alert.alert('알림', '백업 데이터를 붙여넣기 해주세요.');
@@ -308,7 +363,7 @@ export default function SettingsScreen() {
         {/* 앱 정보 */}
         <View style={styles.appInfoCard}>
           <Text style={styles.appName}>⛳ Golf Diary</Text>
-          <Text style={styles.appVersion}>버전 1.3.0</Text>
+          <Text style={styles.appVersion}>버전 1.4.3</Text>
           <Text style={styles.appDev}>Made by 빛나아빠</Text>
         </View>
 
@@ -352,7 +407,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {/* 백업/복원 가이드 모달 */}
+      {/* 백업/복원 가이드 모달 (상세 버전) */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -362,7 +417,7 @@ export default function SettingsScreen() {
         <View style={styles.guideModalOverlay}>
           <View style={styles.guideModalContent}>
             <View style={styles.guideHeader}>
-              <Text style={styles.guideTitle}>📱 휴대폰 교체 시 데이터 이전 방법</Text>
+              <Text style={styles.guideTitle}>📱 백업/복원 사용법</Text>
               <TouchableOpacity onPress={() => setGuideModalVisible(false)}>
                 <Text style={styles.guideCloseBtn}>✕</Text>
               </TouchableOpacity>
@@ -371,53 +426,108 @@ export default function SettingsScreen() {
             <ScrollView style={styles.guideBody} showsVerticalScrollIndicator={false}>
               {/* 백업 가이드 */}
               <View style={styles.guideSection}>
-                <Text style={styles.guideSectionTitle}>💾 STEP 1. 기존 폰에서 백업하기</Text>
+                <Text style={styles.guideSectionTitle}>💾 백업하기</Text>
+                <Text style={styles.guideNote}>버튼 하나로 자동 백업!</Text>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>1</Text>
-                  <Text style={styles.guideStepText}>설정 → "데이터 백업" 버튼을 누릅니다</Text>
+                  <Text style={styles.guideStepText}>Golf Diary 앱에서{'\n'}설정 → <Text style={styles.guideBold}>"데이터 백업"</Text> 버튼을 누르세요</Text>
                 </View>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>2</Text>
-                  <Text style={styles.guideStepText}>공유 화면 하단에서 "카카오톡" 버튼을 누릅니다</Text>
+                  <Text style={styles.guideStepText}>공유 화면이 나타나면{'\n'}<Text style={styles.guideBold}>카카오톡 아이콘</Text>을 찾아서 누르세요</Text>
                 </View>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>3</Text>
-                  <Text style={styles.guideStepText}>"나와의 채팅"을 선택하여 전송합니다</Text>
+                  <Text style={styles.guideStepText}>보낼 상대 선택 화면에서{'\n'}<Text style={styles.guideBold}>"나와의 채팅"</Text>을 선택하세요</Text>
                 </View>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>4</Text>
-                  <Text style={styles.guideStepText}>백업 파일이 카카오톡으로 전송됩니다!{'\n'}(카카오톡을 먼저 누른후 나와의채팅을 눌러주세요)</Text>
+                  <Text style={styles.guideStepText}><Text style={styles.guideBold}>"확인"</Text> 또는 <Text style={styles.guideBold}>"보내기"</Text> 버튼을 누르세요</Text>
+                </View>
+                <View style={styles.guideStep}>
+                  <Text style={styles.guideStepNum}>5</Text>
+                  <Text style={styles.guideStepText}>카카오톡 나와의 채팅에 백업이 저장됩니다! ✅</Text>
                 </View>
               </View>
 
-              {/* 복원 가이드 */}
+              {/* 기록이 많을 때 안내 */}
+              <View style={styles.guideTipBox}>
+                <Text style={styles.guideTipTitle}>📁 기록이 많을 때</Text>
+                <Text style={styles.guideTipText}>기록이 많으면 자동으로 파일로 백업됩니다.</Text>
+                <Text style={styles.guideTipText}>"기록이 많습니다" 팝업이 나오면</Text>
+                <Text style={styles.guideTipText}><Text style={styles.guideBold}>[확인]</Text> → <Text style={styles.guideBold}>카카오톡</Text> → <Text style={styles.guideBold}>나와의 채팅</Text></Text>
+                <Text style={styles.guideTipText}></Text>
+                <Text style={styles.guideTipText}>💡 <Text style={styles.guideBold}>삼성노트</Text> 또는 <Text style={styles.guideBold}>메모장 앱</Text>에</Text>
+                <Text style={styles.guideTipText}>저장하는 것도 추천해요!</Text>
+              </View>
+
+              {/* 복원 가이드 - 파일 선택 */}
               <View style={styles.guideSection}>
-                <Text style={styles.guideSectionTitle}>📥 STEP 2. 새 폰에서 복원하기</Text>
+                <Text style={styles.guideSectionTitle}>📂 복원하기 - 파일에서 불러오기 (추천)</Text>
+                <Text style={styles.guideNote}>가장 쉽고 안전한 방법!</Text>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>1</Text>
-                  <Text style={styles.guideStepText}>새 폰에 Golf Diary 앱을 설치합니다</Text>
+                  <Text style={styles.guideStepText}>카카오톡에서 받은 백업 파일을{'\n'}<Text style={styles.guideBold}>휴대폰에 저장</Text>하세요{'\n'}(파일을 길게 누르면 저장 메뉴가 나와요)</Text>
                 </View>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>2</Text>
-                  <Text style={styles.guideStepText}>카카오톡에서 백업 파일을 열어 내용을 전체 복사합니다</Text>
+                  <Text style={styles.guideStepText}>Golf Diary 앱에서{'\n'}설정 → <Text style={styles.guideBold}>"데이터 복원"</Text>을 누르세요</Text>
                 </View>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>3</Text>
-                  <Text style={styles.guideStepText}>Golf Diary 앱 → 설정 → "데이터 복원"을 누릅니다</Text>
+                  <Text style={styles.guideStepText}><Text style={styles.guideBold}>"파일에서 불러오기"</Text> 버튼을 누르세요</Text>
                 </View>
                 <View style={styles.guideStep}>
                   <Text style={styles.guideStepNum}>4</Text>
-                  <Text style={styles.guideStepText}>복사한 내용을 붙여넣기 → "복원하기" 버튼!</Text>
+                  <Text style={styles.guideStepText}>저장했던 <Text style={styles.guideBold}>골프다이어리_백업_날짜.txt</Text> 파일을 선택하세요</Text>
                 </View>
+                <View style={styles.guideStep}>
+                  <Text style={styles.guideStepNum}>5</Text>
+                  <Text style={styles.guideStepText}><Text style={styles.guideBold}>"복원 완료"</Text> 메시지가 나오면 성공!</Text>
+                </View>
+              </View>
+
+              {/* 복원 가이드 - 복사 붙여넣기 */}
+              <View style={styles.guideSection}>
+                <Text style={styles.guideSectionTitle}>📋 복원하기 - 복사 붙여넣기</Text>
+                <Text style={styles.guideNote}>카카오톡 간편 백업을 사용한 경우</Text>
+                <View style={styles.guideStep}>
+                  <Text style={styles.guideStepNum}>1</Text>
+                  <Text style={styles.guideStepText}>카카오톡 → <Text style={styles.guideBold}>나와의 채팅</Text>을 열어주세요</Text>
+                </View>
+                <View style={styles.guideStep}>
+                  <Text style={styles.guideStepNum}>2</Text>
+                  <Text style={styles.guideStepText}>백업했던 메시지를 <Text style={styles.guideBold}>길게 눌러서</Text>{'\n'}나온 메뉴에서 <Text style={styles.guideBold}>"복사"</Text>를 선택하세요</Text>
+                </View>
+                <View style={styles.guideStep}>
+                  <Text style={styles.guideStepNum}>3</Text>
+                  <Text style={styles.guideStepText}>Golf Diary 앱 → 설정 → <Text style={styles.guideBold}>"데이터 복원"</Text></Text>
+                </View>
+                <View style={styles.guideStep}>
+                  <Text style={styles.guideStepNum}>4</Text>
+                  <Text style={styles.guideStepText}>입력창을 <Text style={styles.guideBold}>길게 눌러서 "붙여넣기"</Text> 하세요</Text>
+                </View>
+                <View style={styles.guideStep}>
+                  <Text style={styles.guideStepNum}>5</Text>
+                  <Text style={styles.guideStepText}><Text style={styles.guideBold}>"붙여넣기로 복원"</Text> 버튼을 누르세요</Text>
+                </View>
+              </View>
+
+              {/* 주의사항 */}
+              <View style={styles.guideWarningBox}>
+                <Text style={styles.guideWarningTitle}>⚠️ 주의사항</Text>
+                <Text style={styles.guideWarningText}>• 복원하면 현재 데이터가 백업 데이터로 바뀝니다</Text>
+                <Text style={styles.guideWarningText}>• 복원 전에 현재 데이터도 백업해두세요!</Text>
+                <Text style={styles.guideWarningText}>• 복원 후 앱을 껐다 다시 켜주세요</Text>
               </View>
 
               {/* 팁 */}
               <View style={styles.guideTipBox}>
                 <Text style={styles.guideTipTitle}>💡 꿀팁</Text>
-                <Text style={styles.guideTipText}>• 카톡에서 파일 열기 → 전체선택 → 복사</Text>
-                <Text style={styles.guideTipText}>• 이메일로 자신에게 보내도 됩니다</Text>
-                <Text style={styles.guideTipText}>• 백업 파일은 작아서 전송이 빠릅니다</Text>
-                <Text style={styles.guideTipText}>• 정기적으로 백업하면 안전합니다!</Text>
+                <Text style={styles.guideTipText}>• 중요한 기록은 <Text style={styles.guideBold}>매달 1번씩</Text> 백업하세요</Text>
+                <Text style={styles.guideTipText}>• 휴대폰 바꾸기 전에 <Text style={styles.guideBold}>꼭 백업</Text>하세요</Text>
+                <Text style={styles.guideTipText}>• 백업은 <Text style={styles.guideBold}>이메일</Text>로도 보낼 수 있어요</Text>
+                <Text style={styles.guideTipText}>• 기록이 많아도 <Text style={styles.guideBold}>자동으로</Text> 처리됩니다!</Text>
               </View>
 
               <View style={{ height: 20 }} />
@@ -433,7 +543,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {/* 데이터 복원 모달 (붙여넣기 방식) */}
+      {/* 데이터 복원 모달 (2가지 선택) */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -449,14 +559,36 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* 방법 1: 파일에서 불러오기 (추천) */}
+            <TouchableOpacity
+              style={styles.restoreMethodCard}
+              onPress={handleRestoreFromFile}
+            >
+              <View style={styles.restoreMethodIcon}>
+                <Text style={styles.restoreMethodIconText}>📂</Text>
+              </View>
+              <View style={styles.restoreMethodInfo}>
+                <Text style={styles.restoreMethodTitle}>파일에서 불러오기 (추천)</Text>
+                <Text style={styles.restoreMethodDesc}>백업 파일을 직접 선택해서 복원</Text>
+              </View>
+              <Text style={styles.restoreMethodArrow}>›</Text>
+            </TouchableOpacity>
+
+            {/* 구분선 */}
+            <View style={styles.restoreMethodDivider}>
+              <View style={styles.restoreMethodDividerLine} />
+              <Text style={styles.restoreMethodDividerText}>또는</Text>
+              <View style={styles.restoreMethodDividerLine} />
+            </View>
+
+            {/* 방법 2: 복사-붙여넣기 */}
             <Text style={styles.restoreDesc}>
-              카카오톡에서 백업 파일 내용을 복사한 후{'\n'}
-              아래에 붙여넣기 해주세요.
+              카카오톡에서 백업 내용을 복사한 후 붙여넣기
             </Text>
 
             <TextInput
               style={styles.restoreInput}
-              placeholder={'{"version": "1.0", ...}\n\n백업 데이터를 여기에 붙여넣기'}
+              placeholder={'백업 데이터를 여기에 붙여넣기...'}
               placeholderTextColor={COLORS.textMuted}
               value={restoreText}
               onChangeText={setRestoreText}
@@ -478,7 +610,7 @@ export default function SettingsScreen() {
                 style={[styles.restoreButton, styles.restoreButtonConfirm]}
                 onPress={executeRestore}
               >
-                <Text style={styles.restoreButtonTextConfirm}>복원하기</Text>
+                <Text style={styles.restoreButtonTextConfirm}>붙여넣기로 복원</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -947,5 +1079,196 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.textWhite,
+  },
+  // 복원 방법 선택 카드 스타일
+  restoreMethodCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary + '10',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    marginBottom: 16,
+  },
+  restoreMethodIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  restoreMethodIconText: {
+    fontSize: 22,
+  },
+  restoreMethodInfo: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  restoreMethodTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  restoreMethodDesc: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  restoreMethodArrow: {
+    fontSize: 24,
+    color: COLORS.primary,
+  },
+  restoreMethodDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  restoreMethodDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.divider,
+  },
+  restoreMethodDividerText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginHorizontal: 12,
+  },
+  // 백업 모달 스타일
+  backupModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  backupModalContent: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+  },
+  backupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  backupTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  backupCloseBtn: {
+    fontSize: 20,
+    color: COLORS.textMuted,
+    padding: 4,
+  },
+  backupSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+  },
+  backupMethodCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE500' + '15',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#FEE500',
+    marginBottom: 12,
+  },
+  backupMethodCardFile: {
+    backgroundColor: COLORS.primary + '10',
+    borderColor: COLORS.primary,
+  },
+  backupMethodIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backupMethodIconText: {
+    fontSize: 24,
+  },
+  backupMethodInfo: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  backupMethodTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backupMethodTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#B8860B',
+  },
+  backupMethodBadge: {
+    backgroundColor: '#FEE500' + '40',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  backupMethodBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#B8860B',
+  },
+  backupMethodDesc: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  backupMethodArrow: {
+    fontSize: 24,
+    color: '#B8860B',
+  },
+  backupCancelButton: {
+    backgroundColor: COLORS.backgroundGray,
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  backupCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  // 가이드 추가 스타일
+  guideNote: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  guideBold: {
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  guideWarningBox: {
+    backgroundColor: '#FF6B6B' + '15',
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF6B6B',
+    marginBottom: 16,
+  },
+  guideWarningTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FF6B6B',
+    marginBottom: 10,
+  },
+  guideWarningText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 22,
   },
 });

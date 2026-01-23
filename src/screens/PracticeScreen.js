@@ -35,11 +35,33 @@ export default function PracticeScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const scrollViewRef = useRef(null);
 
+  // 날짜 문자열을 Date 객체로 파싱하는 함수
+  const parseDate = (dateStr) => {
+    if (!dateStr) return new Date(0);
+    // "2026. 1. 19." 또는 "2026년 1월 19일" 형식 파싱
+    const numbers = dateStr.match(/\d+/g);
+    if (numbers && numbers.length >= 3) {
+      return new Date(parseInt(numbers[0]), parseInt(numbers[1]) - 1, parseInt(numbers[2]));
+    }
+    return new Date(0);
+  };
+
+  // 연습 기록을 날짜 기준으로 정렬하는 함수 (최신순)
+  const sortByDate = (practiceList) => {
+    return [...practiceList].sort((a, b) => {
+      // selectedDate가 있으면 사용, 없으면 date 문자열 파싱
+      const dateA = a.selectedDate ? new Date(a.selectedDate) : parseDate(a.date);
+      const dateB = b.selectedDate ? new Date(b.selectedDate) : parseDate(b.date);
+      return dateB - dateA; // 최신순
+    });
+  };
+
   // 앱 시작시 저장된 데이터 불러오기
   useEffect(() => {
     const loadData = async () => {
       const savedPractices = await loadPractices();
-      setPractices(savedPractices);
+      // 기존 데이터도 날짜 기준으로 정렬
+      setPractices(sortByDate(savedPractices));
     };
     loadData();
   }, []);
@@ -81,11 +103,19 @@ export default function PracticeScreen() {
   const savePractice = async () => {
     if (editingPractice) {
       // 수정 모드
-      const updatedPractices = practices.map(p =>
+      // 기존: 작성일 기준 (수정 시 위치 유지)
+      // const updatedPractices = practices.map(p =>
+      //   p.id === editingPractice.id
+      //     ? { ...practiceData, id: editingPractice.id, date: practiceData.selectedDate.toLocaleDateString('ko-KR') }
+      //     : p
+      // );
+      // 변경: 날짜 기준 정렬
+      const mappedPractices = practices.map(p =>
         p.id === editingPractice.id
           ? { ...practiceData, id: editingPractice.id, date: practiceData.selectedDate.toLocaleDateString('ko-KR') }
           : p
       );
+      const updatedPractices = sortByDate(mappedPractices);
       setPractices(updatedPractices);
       await savePractices(updatedPractices);
       setEditingPractice(null);
@@ -96,7 +126,10 @@ export default function PracticeScreen() {
         id: Date.now(),
         date: practiceData.selectedDate.toLocaleDateString('ko-KR'),
       };
-      const updatedPractices = [newPractice, ...practices];
+      // 기존: 작성일 기준 (항상 맨 위에 추가)
+      // const updatedPractices = [newPractice, ...practices];
+      // 변경: 날짜 기준 정렬
+      const updatedPractices = sortByDate([newPractice, ...practices]);
       setPractices(updatedPractices);
       await savePractices(updatedPractices);
     }
