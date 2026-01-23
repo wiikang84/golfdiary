@@ -103,8 +103,8 @@ export default function SettingsScreen() {
       const fieldCount = data.data?.fieldRounds?.length || 0;
       const totalCount = practiceCount + screenCount + fieldCount;
 
-      // 글자 수 체크 (카카오톡 제한: 약 10,000자)
-      const MAX_KAKAO_LENGTH = 10000;
+      // 글자 수 체크 (카카오톡 제한: 약 7만자, 안전하게 5만자로 설정)
+      const MAX_KAKAO_LENGTH = 50000;
 
       if (jsonString.length <= MAX_KAKAO_LENGTH) {
         // 10,000자 이하: 카카오톡으로 바로 전송
